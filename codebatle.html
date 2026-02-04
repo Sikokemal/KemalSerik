@@ -98,9 +98,11 @@
 <div class="fixed inset-0 grid-bg pointer-events-none"></div>
 <div class="scanline"></div>
 <div id="app" class="relative z-10"></div>
+<script src="config.js"></script>
 
 <script>
-    const apiKey = "AIzaSyBVP1caJYVrtfoedmKOzX_0iEJBxfFBKhs"; 
+    const apiKey = CONFIG.API_KEY;
+    
     
     let currentQuestions = [
         { q: "Python-да айнымалыға мән беру үшін қандай таңба қолданылады?", options: ["=", "==", ":=", "->"], correct: 0 },
@@ -386,6 +388,4 @@
     render();
 </script>
 </body>
-
 </html>
-
