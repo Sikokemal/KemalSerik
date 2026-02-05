@@ -1,5 +1,6 @@
 const CONFIG = {
-    API_KEY:"AIzaSyD2WYzsC_Y-Tg_dawhyIH-hqKWh4mNDsjI"
+    API_KEY:"AIzaSyCk-D-BIV523vrB6isQO_O-JUcng1gcWFY"
 
 };
+
 
