@@ -1,0 +1,22 @@
+name: Deploy Game
+on:
+  push:
+    branches: [ "main" ] # Если твоя ветка называется master, напиши master
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Replace API Key
+        run: |
+          # Этот скрипт ищет метку и меняет её на секрет из настроек GitHub
+          sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" index.html
+
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: . # Копируем всё содержимое папки
+          branch: gh-pages # Публикуем в специальную ветку для сайта
