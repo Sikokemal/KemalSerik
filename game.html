@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Битва: Крылья и Способности</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+        }
+
+        .p1-panel, .p2-panel {
+            width: 50%;
+            padding: 20px;
+            box-sizing: border-box;
+            position: relative;
+            transition: background 0.3s;
+        }
+        
+        .p1-panel { border-right: 2px solid rgba(255, 255, 255, 0.3); background: linear-gradient(to right, rgba(255,0,0,0.1), transparent); }
+        .p2-panel { text-align: right; background: linear-gradient(to left, rgba(0,0,255,0.1), transparent); }
+
+        h1 { margin: 0; font-size: 20px; text-transform: uppercase; color: #fff; text-shadow: 1px 1px 2px black; }
+        h2 { margin: 5px 0 0 0; font-size: 32px; font-weight: bold; text-shadow: 2px 2px 4px black; }
+        
+        .buff-icon {
+            display: inline-block;
+            padding: 5px 10px;
+            margin-top: 5px;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 14px;
+            text-shadow: 0 0 5px white;
+            opacity: 0; /* Скрыто по умолчанию */
+            transition: opacity 0.3s;
+        }
+
+        .controls-hint { margin-top: 10px; font-size: 12px; color: #ddd; background: rgba(0,0,0,0.5); display: inline-block; padding: 5px 10px; border-radius: 5px; }
+        .key { display: inline-block; background: #333; padding: 1px 5px; border-radius: 3px; border: 1px solid #555; font-weight: bold; color: white; }
+        .attack-key { border: 1px solid #ff4444; color: #ffcccc; }
+
+        .upload-container { margin-top: 15px; pointer-events: auto; }
+        .upload-btn { padding: 8px 16px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.4); color: white; border-radius: 5px; cursor: pointer; transition: background 0.2s; font-size: 13px; text-transform: uppercase; }
+        .upload-btn:hover { background: rgba(255, 255, 255, 0.3); }
+        input[type="file"] { display: none; }
+        .anim-status { font-size: 11px; color: #aaa; margin-top: 5px; font-style: italic; white-space: pre-wrap; }
+
+        #divider { position: absolute; left: 50%; top: 0; bottom: 0; width: 4px; background: #fff; transform: translateX(-50%); z-index: 10; }
+        #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; font-weight: bold; background: rgba(0,0,0,0.8); padding: 20px; border-radius: 10px; z-index: 100; }
+        
+        .damage-flash { animation: flashRed 0.2s; }
+        @keyframes flashRed { 0% { background-color: rgba(255, 0, 0, 0.5); } 100% { background-color: transparent; } }
+    </style>
+</head>
+<body>
+
+    <div id="loading">Генерация мира...</div>
+    <div id="divider"></div>
+
+    <div id="ui-layer">
+        <div class="p1-panel" id="p1-ui">
+            <h1>Игрок 1 (Красный)</h1>
+            <h2 id="score-p1" class="p1-score">0</h2>
+            <div id="buff-p1" class="buff-icon"></div>
+            <div class="controls-hint">
+                <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> - Ходить<br>
+                <span class="key">SPACE</span> - Прыжок / Полет<br>
+                <span class="key attack-key">E</span> - АТАКА
+            </div>
+            <div class="upload-container">
+                <button class="upload-btn" onclick="document.getElementById('file-input-p1').click()">📂 Скин</button>
+                <input type="file" id="file-input-p1" accept=".glb,.gltf">
+                <div id="anim-status-p1" class="anim-status"></div>
+            </div>
+        </div>
+        <div class="p2-panel" id="p2-ui">
+            <h1>Игрок 2 (Синий)</h1>
+            <h2 id="score-p2" class="p2-score">0</h2>
+            <div id="buff-p2" class="buff-icon"></div>
+            <div class="controls-hint">
+                <span class="key">↑</span><span class="key">←</span><span class="key">↓</span><span class="key">→</span> - Ходить<br>
+                <span class="key">ENTER</span> - Прыжок / Полет<br>
+                <span class="key attack-key">Num 0</span> - АТАКА
+            </div>
+            <div class="upload-container">
+                <button class="upload-btn" onclick="document.getElementById('file-input-p2').click()">📂 Скин</button>
+                <input type="file" id="file-input-p2" accept=".glb,.gltf">
+                <div id="anim-status-p2" class="anim-status"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+    <script>
+        const config = {
+            speed: 0.4,
+            sprintSpeed: 0.7,
+            turnSpeed: 0.15,
+            jumpStrength: 0.85,
+            doubleJumpStrength: 0.7,
+            flyForce: 0.06,      // Сила подъема при полете
+            maxFlySpeed: 0.6,    // Максимальная скорость взлета
+            gravity: 0.04,
+            cameraHeight: 25,
+            cameraDistance: 32,
+            worldSize: 180,
+            coinCount: 60,
+            npcCount: 8, 
+            npcSpeed: 0.2, 
+            attackRange: 8.0,
+            knockbackForce: 1.8,
+            stunDuration: 50,
+            npcMaxHP: 40,
+            powerUpDuration: 900 // 15 секунд
+        };
+
+        let scene, renderer;
+        let camera1, camera2;
+        let players = [];
+        let npcs = []; 
+        let obstacles = [];
+        let coins = [];
+        let powerups = []; 
+        let particles = [];
+        let gltfLoader;
+        let clock = new THREE.Clock();
+        
+        // Ввод (добавлено spaceHeld для полета)
+        const inputP1 = { w: false, a: false, s: false, d: false, shift: false, jumpPressed: false, attackPressed: false, spaceHeld: false };
+        const inputP2 = { up: false, left: false, down: false, right: false, shift: false, jumpPressed: false, attackPressed: false, spaceHeld: false };
+
+        window.onload = function() {
+            document.getElementById('loading').style.display = 'none';
+            init();
+            setupFileUploads(); 
+            animate();
+        };
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 30, 160);
+
+            gltfLoader = new THREE.GLTFLoader();
+
+            const aspect = (window.innerWidth / 2) / window.innerHeight;
+            camera1 = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+            camera2 = new THREE.PerspectiveCamera(60, aspect, 0.1, 1000);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.setScissorTest(true); 
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            dirLight.position.set(100, 150, 60);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 4096;
+            dirLight.shadow.mapSize.height = 4096;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 300;
+            const d = 150;
+            dirLight.shadow.camera.left = -d; dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d; dirLight.shadow.camera.bottom = -d;
+            scene.add(dirLight);
+
+            createEnvironment();
+            createComplexRobot(0, 0xff3333, -20, 20);
+            createComplexRobot(1, 0x3333ff, 20, -20);
+            createNPCs(); 
+            createCoins();
+
+            window.addEventListener('resize', onWindowResize, false);
+            document.addEventListener('keydown', onKeyDown, false);
+            document.addEventListener('keyup', onKeyUp, false);
+        }
+
+        function createEnvironment() {
+            const planeGeometry = new THREE.PlaneGeometry(config.worldSize * 2, config.worldSize * 2);
+            const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x3a9d23 });
+            const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+            plane.rotation.x = -Math.PI / 2;
+            plane.receiveShadow = true;
+            scene.add(plane);
+
+            for (let i = 0; i < 20; i++) createMountain();
+
+            for (let i = 0; i < 30; i++) {
+                let x = (Math.random() - 0.5) * config.worldSize;
+                let z = (Math.random() - 0.5) * config.worldSize;
+                if (Math.abs(x) < 20 && Math.abs(z) < 20) continue;
+
+                const type = Math.random();
+                if (type > 0.5) {
+                    const trunkGeo = new THREE.CylinderGeometry(0.5, 0.7, 4);
+                    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+                    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                    trunk.position.set(x, 2, z);
+                    trunk.castShadow = true;
+                    scene.add(trunk);
+                    const leavesGeo = new THREE.ConeGeometry(3.5, 7, 8);
+                    const leavesMat = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+                    const leaves = new THREE.Mesh(leavesGeo, leavesMat);
+                    leaves.position.set(x, 6, z);
+                    leaves.castShadow = true;
+                    scene.add(leaves);
+                    obstacles.push({ x:x, z:z, halfSize: 1, topY: 0 }); 
+                } else {
+                    const rockGeo = new THREE.DodecahedronGeometry(2.5);
+                    const rockMat = new THREE.MeshStandardMaterial({ color: 0x777777 });
+                    const rock = new THREE.Mesh(rockGeo, rockMat);
+                    rock.position.set(x, 1.5, z);
+                    rock.castShadow = true;
+                    scene.add(rock);
+                    obstacles.push({ x:x, z:z, halfSize: 2.5, topY: 2.5 });
+                }
+            }
+        }
+
+        function createMountain() {
+            const steps = 3 + Math.floor(Math.random() * 4); 
+            let currentX = (Math.random() - 0.5) * (config.worldSize - 40);
+            let currentZ = (Math.random() - 0.5) * (config.worldSize - 40);
+            if (Math.abs(currentX) < 20) currentX += 30;
+
+            let currentY = 0;
+            const sizeBase = 8;
+
+            for(let i=0; i<steps; i++) {
+                const size = sizeBase - i; 
+                const height = 4;
+                const geo = new THREE.BoxGeometry(size, height, size);
+                const mat = new THREE.MeshStandardMaterial({ color: 0x666666 });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(currentX, currentY + height/2, currentZ);
+                mesh.castShadow = true; mesh.receiveShadow = true; scene.add(mesh);
+                obstacles.push({ x:currentX, z:currentZ, halfSize: size/2 + 0.2, topY: currentY + height });
+                currentY += height;
+                currentX += (Math.random() - 0.5) * 2; currentZ += (Math.random() - 0.5) * 2;
+            }
+            spawnPowerUp(currentX, currentY + 1.5, currentZ);
+        }
+
+        function spawnPowerUp(x, y, z) {
+            // Типы: laser (красный), smash (фиолетовый), wings (голубой), shield (синий)
+            const rand = Math.random();
+            let type = 'laser';
+            let color = 0xff0000;
+            
+            if (rand < 0.25) { type = 'laser'; color = 0xff0000; }
+            else if (rand < 0.5) { type = 'smash'; color = 0xaa00ff; }
+            else if (rand < 0.75) { type = 'wings'; color = 0x00ffff; } // Крылья
+            else { type = 'shield'; color = 0x0000ff; } // Щит
+            
+            const geo = new THREE.OctahedronGeometry(1, 0);
+            const mat = new THREE.MeshBasicMaterial({ color: color, wireframe: true });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, y, z);
+            
+            const coreGeo = new THREE.OctahedronGeometry(0.5, 0);
+            const coreMat = new THREE.MeshBasicMaterial({ color: color });
+            const core = new THREE.Mesh(coreGeo, coreMat);
+            mesh.add(core);
+
+            scene.add(mesh);
+            powerups.push({ mesh, type, active: true, basePathY: y });
+        }
+
+        function createNPCs() {
+            for(let i=0; i<config.npcCount; i++) createNPCRobot();
+        }
+
+        function createNPCRobot() {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: 0x444444, metalness: 0.6, roughness: 0.4 });
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.8, 1.2), mat);
+            torso.position.y = 2.4; torso.castShadow = true; group.add(torso);
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), mat);
+            head.position.set(0, 1.1, 0); torso.add(head);
+            const eye = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.2, 16), new THREE.MeshBasicMaterial({color: 0xff5500}));
+            eye.rotation.x = Math.PI/2; eye.position.set(0, 0, 0.4); head.add(eye);
+            const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.4, 0.4), mat); lArm.position.set(1, -0.2, 0); torso.add(lArm);
+            const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 1.4, 0.4), mat); rArm.position.set(-1, -0.2, 0); torso.add(rArm);
+            const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, 0.6), mat); lLeg.position.set(0.4, -1.2, 0); torso.add(lLeg);
+            const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, 0.6), mat); rLeg.position.set(-0.4, -1.2, 0); torso.add(rLeg);
+            let x = (Math.random() - 0.5) * (config.worldSize - 30);
+            let z = (Math.random() - 0.5) * (config.worldSize - 30);
+            if(Math.abs(x) < 20) x += 30;
+            group.position.set(x, 0, z);
+            scene.add(group);
+            npcs.push({
+                mesh: group, limbs: { body: torso, lLeg, rLeg, lArm, rArm, eye: eye },
+                velocity: 0, hp: config.npcMaxHP, walkTime: Math.random() * 100,
+                isStunned: false, stunTimer: 0, knockbackVel: new THREE.Vector3(), target: null, attackCooldown: 0
+            });
+        }
+
+        function createComplexRobot(id, color, startX, startZ) {
+            const group = new THREE.Group();
+            const mainMat = new THREE.MeshStandardMaterial({ color: color, metalness: 0.7, roughness: 0.3 });
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.5 });
+            
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.0, 1.4), mainMat);
+            torso.position.y = 2.4; torso.castShadow = true; group.add(torso);
+
+            // КРЫЛЬЯ (Скрыты по умолчанию)
+            const wingsGroup = new THREE.Group();
+            wingsGroup.position.set(0, 0.5, -0.8);
+            torso.add(wingsGroup);
+            const wingGeo = new THREE.BoxGeometry(3.0, 0.2, 0.8);
+            const wingMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00aaaa, emissiveIntensity: 0.5 });
+            const wingL = new THREE.Mesh(wingGeo, wingMat); wingL.position.x = 1.6; wingsGroup.add(wingL);
+            const wingR = new THREE.Mesh(wingGeo, wingMat); wingR.position.x = -1.6; wingsGroup.add(wingR);
+            wingsGroup.visible = false; // Скрыты
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 1.2), mainMat);
+            head.position.set(0, 1.2, 0); head.castShadow = true; torso.add(head);
+            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.25, 0.1), new THREE.MeshBasicMaterial({ color: 0x00ffff })); 
+            visor.position.set(0, 0.1, 0.61); head.add(visor);
+
+            const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, 0.5), mainMat); lArm.position.set(1.2, -0.6, 0); lArm.castShadow = true; torso.add(lArm);
+            const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.6, 0.5), mainMat); rArm.position.set(-1.2, -0.6, 0); rArm.castShadow = true; torso.add(rArm);
+
+            const swordGroup = new THREE.Group(); swordGroup.position.set(0, -0.7, 0.3); swordGroup.rotation.x = Math.PI / 2; rArm.add(swordGroup);
+            const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6), darkMat); handle.rotation.x = -Math.PI / 2; handle.position.set(0, 0, -0.3); swordGroup.add(handle);
+            const bladeColor = (id === 0) ? 0xff0000 : 0x0000ff;
+            const blade = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.0, 0.05), new THREE.MeshBasicMaterial({ color: bladeColor }));
+            blade.rotation.x = -Math.PI / 2; blade.position.set(0, 0, 1.5); swordGroup.add(blade);
+
+            const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.8, 0.7), darkMat); lLeg.position.set(0.6, -1.8, 0); lLeg.castShadow = true; torso.add(lLeg);
+            const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.8, 0.7), darkMat); rLeg.position.set(-0.6, -1.8, 0); rLeg.castShadow = true; torso.add(rLeg);
+
+            group.position.set(startX, 0, startZ);
+            scene.add(group);
+
+            // ЩИТ (Скрыт по умолчанию)
+            const shieldGeo = new THREE.SphereGeometry(2.5, 32, 32);
+            const shieldMat = new THREE.MeshBasicMaterial({ color: 0x0088ff, transparent: true, opacity: 0.3, wireframe: true });
+            const shield = new THREE.Mesh(shieldGeo, shieldMat);
+            shield.position.y = 2.0;
+            group.add(shield);
+            shield.visible = false;
+
+            const ring = new THREE.Mesh(new THREE.RingGeometry(2.0, 2.3, 32), new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide, transparent: true, opacity: 0.5 }));
+            ring.rotation.x = -Math.PI / 2; ring.position.y = 0.1; scene.add(ring);
+
+            players.push({
+                id: id,
+                mesh: group,
+                ring: ring,
+                isProcedural: true, 
+                mixer: null, actions: {}, 
+                limbs: { head, lArm, rArm, lLeg, rLeg, body: torso, wings: wingsGroup },
+                shieldMesh: shield,
+                velocity: 0,
+                jumpCount: 0,
+                score: 0,
+                color: color,
+                walkTime: 0,
+                health: 100,
+                isStunned: false, stunTimer: 0,
+                attackCooldown: 0, isAttacking: false, attackAnimTime: 0,
+                knockbackVel: new THREE.Vector3(),
+                currentPowerup: null, 
+                powerupTimer: 0
+            });
+        }
+
+        function checkPowerups(player) {
+            for(let i=0; i<powerups.length; i++) {
+                const p = powerups[i];
+                if(!p.active) continue;
+                if(player.mesh.position.distanceTo(p.mesh.position) < 3.0) {
+                    p.active = false; scene.remove(p.mesh); activatePowerup(player, p.type);
+                }
+            }
+        }
+
+        function activatePowerup(player, type) {
+            player.currentPowerup = type;
+            player.powerupTimer = config.powerUpDuration;
+            
+            const uiId = player.id === 0 ? 'buff-p1' : 'buff-p2';
+            const el = document.getElementById(uiId);
+            
+            // Сброс визуалов
+            if(player.isProcedural) player.limbs.wings.visible = false;
+            player.shieldMesh.visible = false;
+
+            if(type === 'laser') {
+                el.innerText = "ЛАЗЕРНЫЙ МЕЧ!"; el.style.backgroundColor = "rgba(255, 0, 0, 0.8)";
+            } else if (type === 'smash') {
+                el.innerText = "МЕГА ПРЫЖОК!"; el.style.backgroundColor = "rgba(180, 0, 255, 0.8)";
+            } else if (type === 'wings') {
+                el.innerText = "КРЫЛЬЯ!"; el.style.backgroundColor = "rgba(0, 255, 255, 0.8)";
+                if(player.isProcedural) player.limbs.wings.visible = true;
+            } else if (type === 'shield') {
+                el.innerText = "ЩИТ!"; el.style.backgroundColor = "rgba(0, 0, 255, 0.8)";
+                player.shieldMesh.visible = true;
+            }
+            el.style.color = "white";
+            el.style.opacity = 1;
+        }
+
+        function updatePowerupStatus(player) {
+            if(player.powerupTimer > 0) {
+                player.powerupTimer--;
+                if(player.powerupTimer <= 0) {
+                    player.currentPowerup = null;
+                    const uiId = player.id === 0 ? 'buff-p1' : 'buff-p2';
+                    document.getElementById(uiId).style.opacity = 0;
+                    if(player.isProcedural) player.limbs.wings.visible = false;
+                    player.shieldMesh.visible = false;
+                }
+            }
+        }
+
+        function attemptAttack(attacker) {
+            if (attacker.isStunned || attacker.attackCooldown > 0) return;
+            attacker.attackCooldown = 40; 
+            attacker.isAttacking = true;
+            attacker.attackAnimTime = 0; 
+
+            if(attacker.currentPowerup === 'laser') { fireLaser(attacker); return; }
+
+            setTimeout(() => {
+                if (attacker.isStunned) return;
+                players.forEach(victim => { if(victim.id === attacker.id) return; checkHit(attacker, victim, false); });
+                if (players.includes(attacker)) { npcs.forEach(npc => checkHit(attacker, npc, true)); }
+            }, 250);
+        }
+
+        function fireLaser(attacker) {
+            const start = attacker.mesh.position.clone(); start.y += 2.5; 
+            const forward = getForwardVector(attacker.mesh);
+            const end = start.clone().add(forward.multiplyScalar(40)); 
+            const material = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 5 });
+            const points = [start, end];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const line = new THREE.Line(geometry, material);
+            scene.add(line);
+            setTimeout(() => scene.remove(line), 100);
+            const range = 40;
+            players.forEach(victim => { if(victim.id === attacker.id) return; checkLaserHit(attacker, victim, false, range); });
+            npcs.forEach(npc => checkLaserHit(attacker, npc, true, range));
+        }
+
+        function checkLaserHit(attacker, victim, isNPC, range) {
+            const toVictim = victim.mesh.position.clone().sub(attacker.mesh.position);
+            const dist = toVictim.length(); toVictim.normalize();
+            const forward = getForwardVector(attacker.mesh);
+            const dot = forward.dot(toVictim);
+            if(dist < range && dot > 0.95) {
+                if(isNPC) applyHitToNPC(victim, attacker, true); else applyHitToPlayer(victim, attacker, true);
+            }
+        }
+
+        function checkHit(attacker, victim, isNPC) {
+            const dist = attacker.mesh.position.distanceTo(victim.mesh.position);
+            const forward = getForwardVector(attacker.mesh);
+            const toVictim = victim.mesh.position.clone().sub(attacker.mesh.position).normalize();
+            const dot = forward.dot(toVictim);
+            const angleTreshold = isNPC ? 0.2 : 0.5;
+            if (dist < config.attackRange && dot > angleTreshold) {
+                if (isNPC) applyHitToNPC(victim, attacker); else applyHitToPlayer(victim, attacker);
+            }
+        }
+
+        function getForwardVector(mesh) {
+            const v = new THREE.Vector3(0, 0, 1);
+            v.applyQuaternion(mesh.quaternion);
+            return v;
+        }
+
+        function applyHitToPlayer(victim, attacker, isLaser=false) {
+            if(victim.currentPowerup === 'shield') return; // ЩИТ БЛОКИРУЕТ
+
+            const force = isLaser ? config.knockbackForce * 2 : config.knockbackForce;
+            createExplosion(victim.mesh.position.x, victim.mesh.position.y+2, victim.mesh.position.z, 0xffffff);
+            const dir = victim.mesh.position.clone().sub(attacker.mesh.position).normalize();
+            victim.knockbackVel.copy(dir).multiplyScalar(force);
+            victim.knockbackVel.y = 0.8;
+            victim.isStunned = true; victim.stunTimer = config.stunDuration;
+            
+            if (victim.isProcedural) { victim.limbs.body.rotation.x = -Math.PI / 2; victim.limbs.body.position.y = 1.0; } 
+            else { victim.mesh.rotation.x = -Math.PI / 2; victim.mesh.position.y += 1; }
+
+            const drop = isLaser ? 8 : 5;
+            if (victim.score > 0) { victim.score = Math.max(0, victim.score - drop); updateScoreUI(victim); spawnDroppedCoins(victim.mesh.position, drop); } 
+            else { spawnDroppedCoins(victim.mesh.position, 2); }
+            const panel = document.getElementById(victim.id === 0 ? 'p1-ui' : 'p2-ui');
+            panel.classList.add('damage-flash'); setTimeout(() => panel.classList.remove('damage-flash'), 200);
+        }
+
+        function applyHitToNPC(npc, attacker, isLaser=false) {
+            if(npc.hp <= 0) return;
+            createExplosion(npc.mesh.position.x, npc.mesh.position.y+2, npc.mesh.position.z, 0xff5500);
+            const dir = npc.mesh.position.clone().sub(attacker.mesh.position).normalize();
+            npc.knockbackVel.copy(dir).multiplyScalar(config.knockbackForce * 1.5);
+            npc.knockbackVel.y = 0.6;
+            npc.isStunned = true; npc.stunTimer = 60; 
+            npc.limbs.body.rotation.x = -Math.PI/3;
+            const dmg = isLaser ? 20 : 10;
+            npc.hp -= dmg;
+            npc.limbs.eye.material.color.setHex(0xff0000); setTimeout(() => { if(npc.hp>0) npc.limbs.eye.material.color.setHex(0xff5500); }, 300);
+            spawnDroppedCoins(npc.mesh.position, 4); 
+            if(npc.hp <= 0) {
+                spawnDroppedCoins(npc.mesh.position, 15); 
+                createExplosion(npc.mesh.position.x, 2, npc.mesh.position.z, 0x000000);
+                if(Math.random() > 0.5) { spawnPowerUp(npc.mesh.position.x, 2, npc.mesh.position.z); }
+                setTimeout(() => { scene.remove(npc.mesh); npcs = npcs.filter(n => n !== npc); setTimeout(() => createNPCRobot(), 5000); }, 100);
+            }
+        }
+
+        function triggerSmash(player) {
+            createExplosion(player.mesh.position.x, 0, player.mesh.position.z, 0xaa00ff);
+            const ringGeo = new THREE.RingGeometry(1, 10, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff, side: THREE.DoubleSide, transparent: true, opacity: 0.8 });
+            const wave = new THREE.Mesh(ringGeo, ringMat);
+            wave.position.copy(player.mesh.position); wave.position.y = 0.5; wave.rotation.x = -Math.PI / 2; scene.add(wave);
+            const anim = setInterval(() => {
+                wave.scale.multiplyScalar(1.1); wave.material.opacity -= 0.05;
+                if(wave.material.opacity <= 0) { clearInterval(anim); scene.remove(wave); }
+            }, 30);
+            npcs.forEach(npc => { if(player.mesh.position.distanceTo(npc.mesh.position) < 15) { applyHitToNPC(npc, player); } });
+            players.forEach(p => { if(p.id !== player.id && player.mesh.position.distanceTo(p.mesh.position) < 15) { applyHitToPlayer(p, player); } });
+        }
+
+        function spawnDroppedCoins(pos, count) {
+            for (let i = 0; i < count; i++) {
+                const geo = new THREE.TorusGeometry(0.6, 0.2, 8, 16);
+                const mat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(pos.x, pos.y + 2.0, pos.z); scene.add(mesh);
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 0.4 + Math.random() * 0.6;
+                const up = 0.8 + Math.random() * 0.5;
+                coins.push({ mesh: mesh, active: true, basePathY: 0, isDrop: true, vel: new THREE.Vector3(Math.cos(angle) * speed, up, Math.sin(angle) * speed) });
+            }
+        }
+
+        function createExplosion(x, y, z, color) {
+            for(let i=0; i<15; i++) {
+                const geo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+                const mat = new THREE.MeshBasicMaterial({ color: color });
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, y, z); scene.add(mesh);
+                particles.push({ mesh: mesh, vx: (Math.random()-0.5), vy: Math.random()*0.8, vz: (Math.random()-0.5), life: 1.0 });
+            }
+        }
+
+        function updatePlayer(player, input, isArrowKeys, delta) {
+            updatePowerupStatus(player);
+            checkPowerups(player);
+
+            if (player.attackCooldown > 0) player.attackCooldown--;
+
+            // ПОЛЕТ (Если есть крылья)
+            if (player.currentPowerup === 'wings') {
+                if (input.spaceHeld && !player.isStunned) {
+                    player.velocity += config.flyForce;
+                    if(player.velocity > config.maxFlySpeed) player.velocity = config.maxFlySpeed;
+                    // Анимация махания
+                    if(player.isProcedural) {
+                        player.limbs.wings.rotation.z = Math.sin(Date.now() * 0.02) * 0.5; 
+                    }
+                } else {
+                    // Падение с крыльями медленнее (планирование)
+                    player.velocity -= config.gravity * 0.5; 
+                }
+            } else {
+                player.velocity -= config.gravity;
+            }
+
+            if (player.isStunned) {
+                player.stunTimer--;
+                player.mesh.position.add(player.knockbackVel);
+                player.knockbackVel.multiplyScalar(0.95);
+                
+                if (player.mesh.position.y < 0) { player.mesh.position.y = 0; player.knockbackVel.y = 0; }
+                if (player.stunTimer <= 0) {
+                    player.isStunned = false;
+                    if (player.isProcedural) { player.limbs.body.rotation.x = 0; player.limbs.body.position.y = 2.4; } 
+                    else { player.mesh.rotation.x = 0; }
+                }
+                player.ring.position.copy(player.mesh.position);
+                return;
+            }
+
+            if (input.attackPressed) { attemptAttack(player); input.attackPressed = false; }
+
+            const moveSpeed = input.shift ? config.sprintSpeed : config.speed;
+            let dx = 0; let dz = 0;
+            if (isArrowKeys) { if (input.up) dz -= 1; if (input.down) dz += 1; if (input.left) dx -= 1; if (input.right) dx += 1; } 
+            else { if (input.w) dz -= 1; if (input.s) dz += 1; if (input.a) dx -= 1; if (input.d) dx += 1; }
+
+            if (dx !== 0 || dz !== 0) {
+                const len = Math.sqrt(dx*dx + dz*dz); dx /= len; dz /= len;
+                const nextX = player.mesh.position.x + dx * moveSpeed;
+                const nextZ = player.mesh.position.z + dz * moveSpeed;
+                let blocked = false;
+                for (let box of obstacles) {
+                    if (Math.abs(nextX - box.x) < box.halfSize + 0.8 && Math.abs(nextZ - box.z) < box.halfSize + 0.8) {
+                        if (player.mesh.position.y < box.topY - 0.2) { blocked = true; break; }
+                    }
+                }
+                if (!blocked) { player.mesh.position.x = nextX; player.mesh.position.z = nextZ; }
+                const targetRot = Math.atan2(dx, dz);
+                let diff = targetRot - player.mesh.rotation.y;
+                while (diff > Math.PI) diff -= Math.PI * 2; while (diff < -Math.PI) diff += Math.PI * 2;
+                player.mesh.rotation.y += diff * config.turnSpeed;
+            }
+
+            handleAnimations(player, (dx!==0 || dz!==0), input.shift, delta);
+
+            // Анимация Щита
+            if(player.currentPowerup === 'shield') {
+                player.shieldMesh.rotation.y += 0.02;
+                player.shieldMesh.rotation.z += 0.01;
+            }
+
+            let nextY = player.mesh.position.y + player.velocity;
+            let groundY = 0;
+            for (let box of obstacles) {
+                if (Math.abs(player.mesh.position.x - box.x) < box.halfSize + 0.5 && Math.abs(player.mesh.position.z - box.z) < box.halfSize + 0.5) {
+                    if (player.mesh.position.y >= box.topY - 1.0) groundY = box.topY;
+                }
+            }
+
+            if (nextY <= groundY) {
+                if (player.velocity < -0.3) {
+                    createExplosion(player.mesh.position.x, groundY, player.mesh.position.z, 0x8B4513);
+                    if(player.currentPowerup === 'smash') triggerSmash(player);
+                }
+                nextY = groundY;
+                player.velocity = 0;
+                player.jumpCount = 0;
+            }
+            player.mesh.position.y = nextY;
+            player.ring.position.copy(player.mesh.position);
+            player.ring.position.y = nextY + 0.1;
+
+            const lim = config.worldSize / 2;
+            player.mesh.position.x = Math.max(-lim, Math.min(lim, player.mesh.position.x));
+            player.mesh.position.z = Math.max(-lim, Math.min(lim, player.mesh.position.z));
+        }
+
+        function updateNPC(npc, delta) {
+            if (npc.hp <= 0) return;
+            if (npc.attackCooldown > 0) npc.attackCooldown--;
+            if (npc.isStunned) {
+                npc.stunTimer--; npc.mesh.position.add(npc.knockbackVel); npc.knockbackVel.multiplyScalar(0.9); npc.knockbackVel.y -= 0.05;
+                if(npc.mesh.position.y < 0) { npc.mesh.position.y = 0; npc.knockbackVel.y = 0; }
+                if(npc.stunTimer <= 0) { npc.isStunned = false; npc.limbs.body.rotation.x = 0; }
+                return;
+            }
+            let minDist = 999; let target = null;
+            players.forEach(p => { const d = npc.mesh.position.distanceTo(p.mesh.position); if(d < minDist && !p.isStunned) { minDist = d; target = p; } });
+
+            if (target && minDist < 45) {
+                const angle = Math.atan2(target.mesh.position.x - npc.mesh.position.x, target.mesh.position.z - npc.mesh.position.z);
+                npc.mesh.rotation.y = angle;
+                if (minDist < 6) {
+                    if (npc.attackCooldown <= 0) {
+                        npc.attackCooldown = 150; 
+                        npc.limbs.rArm.rotation.x = -2.5; 
+                        setTimeout(() => { if (npc.hp > 0 && !npc.isStunned) {
+                            npc.limbs.rArm.rotation.x = 1.5; 
+                            if (npc.mesh.position.distanceTo(target.mesh.position) < 7) applyHitToPlayer(target, npc);
+                            setTimeout(() => npc.limbs.rArm.rotation.x = 0, 300);
+                        }}, 700);
+                    }
+                } else {
+                    npc.mesh.position.x += Math.sin(angle) * config.npcSpeed; npc.mesh.position.z += Math.cos(angle) * config.npcSpeed;
+                    npc.walkTime += 0.2;
+                    npc.limbs.lLeg.rotation.x = Math.sin(npc.walkTime); npc.limbs.rLeg.rotation.x = -Math.sin(npc.walkTime);
+                }
+            }
+            npc.mesh.position.y = 0; 
+        }
+
+        function handleAnimations(player, isMoving, isSprint, delta) {
+            if (player.isProcedural) {
+                if (player.isAttacking) {
+                    player.attackAnimTime += delta * 10; 
+                    if (player.attackAnimTime < 1.5) player.limbs.rArm.rotation.x = THREE.MathUtils.lerp(player.limbs.rArm.rotation.x, -2.5, 0.3);
+                    else if (player.attackAnimTime < 3.0) player.limbs.rArm.rotation.x = THREE.MathUtils.lerp(player.limbs.rArm.rotation.x, 1.5, 0.5);
+                    else { player.isAttacking = false; player.limbs.rArm.rotation.x = 0; }
+                    return; 
+                }
+                if (isMoving) {
+                    player.walkTime += isSprint ? 0.3 : 0.15;
+                    const angle = Math.sin(player.walkTime);
+                    player.limbs.lLeg.rotation.x = angle; player.limbs.rLeg.rotation.x = -angle;
+                    player.limbs.lArm.rotation.x = -angle; player.limbs.rArm.rotation.x = angle;
+                } else {
+                    player.limbs.lLeg.rotation.x = 0; player.limbs.rLeg.rotation.x = 0;
+                    player.limbs.lArm.rotation.x = 0; player.limbs.rArm.rotation.x = 0;
+                }
+            } else {
+                if (player.mixer) {
+                    if (player.actions.walk) player.actions.walk.paused = !isMoving;
+                    player.mixer.update(delta);
+                } else {
+                    player.mesh.rotation.z = isMoving ? Math.sin(Date.now() * 0.015) * 0.1 : 0;
+                }
+            }
+        }
+
+        function setupFileUploads() { setupInput('file-input-p1', 0, 'anim-status-p1'); setupInput('file-input-p2', 1, 'anim-status-p2'); }
+        function setupInput(inputId, idx, statusId) {
+            const input = document.getElementById(inputId);
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0]; if(!file) return; const url = URL.createObjectURL(file);
+                gltfLoader.load(url, (gltf) => {
+                    const p = players[idx]; while(p.mesh.children.length > 0) p.mesh.remove(p.mesh.children[0]);
+                    const model = gltf.scene;
+                    const box = new THREE.Box3().setFromObject(model); const size = new THREE.Vector3(); box.getSize(size);
+                    const scale = 3.5 / Math.max(size.x, size.y, size.z); model.scale.set(scale, scale, scale); model.position.y = -box.min.y * scale; 
+                    p.mesh.add(model); p.isProcedural = false; p.actions = {};
+                    if(gltf.animations.length > 0) {
+                        p.mixer = new THREE.AnimationMixer(model);
+                        let walk = gltf.animations.find(a => /walk|run/i.test(a.name)); if(walk) { p.actions.walk = p.mixer.clipAction(walk); p.actions.walk.play(); }
+                        document.getElementById(statusId).innerText = "Аним: OK";
+                    }
+                });
+            });
+        }
+
+        function checkCoins(player) {
+            for (let c of coins) {
+                if (c.active && player.mesh.position.distanceTo(c.mesh.position) < 3.0) {
+                    c.active = false; scene.remove(c.mesh);
+                    player.score += c.isDrop ? 1 : 1; 
+                    const el = player.id === 0 ? document.getElementById('score-p1') : document.getElementById('score-p2');
+                    el.innerText = player.score;
+                }
+            }
+        }
+
+        function createCoins() {
+            const geo = new THREE.TorusGeometry(0.8, 0.3, 8, 16);
+            const mat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+            for (let i = 0; i < config.coinCount; i++) {
+                const mesh = new THREE.Mesh(geo, mat);
+                let x = (Math.random()-0.5)*config.worldSize; let z = (Math.random()-0.5)*config.worldSize;
+                mesh.position.set(x, 1.5, z); scene.add(mesh);
+                coins.push({ mesh: mesh, active: true, basePathY: 1.5 });
+            }
+        }
+
+        function onKeyDown(e) {
+            if (e.code === 'KeyW') inputP1.w = true; if (e.code === 'KeyS') inputP1.s = true; if (e.code === 'KeyA') inputP1.a = true; if (e.code === 'KeyD') inputP1.d = true; if (e.code === 'ShiftLeft') inputP1.shift = true;
+            if (e.code === 'Space') { if (!inputP1.jumpPressed) { inputP1.jumpPressed = true; tryJump(players[0]); } inputP1.spaceHeld = true; }
+            if (e.code === 'KeyE') { if(!inputP1.attackPressed) inputP1.attackPressed = true; }
+
+            if (e.code === 'ArrowUp') inputP2.up = true; if (e.code === 'ArrowDown') inputP2.down = true; if (e.code === 'ArrowLeft') inputP2.left = true; if (e.code === 'ArrowRight') inputP2.right = true; if (e.code === 'ShiftRight') inputP2.shift = true;
+            if (e.code === 'Enter') { if (!inputP2.jumpPressed) { inputP2.jumpPressed = true; tryJump(players[1]); } inputP2.spaceHeld = true; }
+            if (e.code === 'Numpad0') { if(!inputP2.attackPressed) inputP2.attackPressed = true; }
+        }
+
+        function onKeyUp(e) {
+            if (e.code === 'KeyW') inputP1.w = false; if (e.code === 'KeyS') inputP1.s = false; if (e.code === 'KeyA') inputP1.a = false; if (e.code === 'KeyD') inputP1.d = false; if (e.code === 'ShiftLeft') inputP1.shift = false; 
+            if (e.code === 'Space') { inputP1.jumpPressed = false; inputP1.spaceHeld = false; } if (e.code === 'KeyE') inputP1.attackPressed = false;
+            
+            if (e.code === 'ArrowUp') inputP2.up = false; if (e.code === 'ArrowDown') inputP2.down = false; if (e.code === 'ArrowLeft') inputP2.left = false; if (e.code === 'ArrowRight') inputP2.right = false; if (e.code === 'ShiftRight') inputP2.shift = false; 
+            if (e.code === 'Enter') { inputP2.jumpPressed = false; inputP2.spaceHeld = false; } if (e.code === 'Numpad0') inputP2.attackPressed = false;
+        }
+
+        function tryJump(player) {
+            if (player.isStunned || player.currentPowerup === 'wings') return;
+            const extraJump = player.currentPowerup === 'smash' ? 0.3 : 0;
+            if (player.jumpCount < 2) {
+                player.velocity = (player.jumpCount === 0) ? config.jumpStrength + extraJump : config.doubleJumpStrength + extraJump;
+                player.jumpCount++;
+                if (player.mixer && player.actions.jump) { player.actions.jump.stop(); player.actions.jump.play(); }
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            updatePlayer(players[0], inputP1, false, delta);
+            updatePlayer(players[1], inputP2, true, delta);
+            npcs.forEach(npc => updateNPC(npc, delta));
+            checkCoins(players[0]); checkCoins(players[1]);
+
+            for(let p of powerups) {
+                if(p.active) {
+                    p.mesh.rotation.y += 0.05;
+                    p.mesh.position.y = p.basePathY + Math.sin(Date.now()*0.003)*0.5;
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i]; p.life -= 0.03;
+                p.mesh.position.add(new THREE.Vector3(p.vx, p.vy, p.vz)); p.vy -= 0.03; p.mesh.rotation.x += 0.2; p.mesh.scale.setScalar(p.life);
+                if (p.life <= 0) { scene.remove(p.mesh); particles.splice(i, 1); }
+            }
+
+            const time = Date.now() * 0.003;
+            for(let i=coins.length-1; i>=0; i--) {
+                const c = coins[i]; if (!c.active) continue;
+                c.mesh.rotation.y += 0.05;
+                if(c.isDrop) {
+                    c.mesh.position.add(c.vel); c.vel.y -= 0.03;
+                    if(c.mesh.position.y < 1.5) { c.mesh.position.y = 1.5; if(Math.abs(c.vel.y)>0.1) c.vel.y *= -0.5; else { c.vel.set(0,0,0); c.isDrop = false; c.basePathY = 1.5; } }
+                } else { c.mesh.position.y = c.basePathY + Math.sin(time + i) * 0.3; }
+            }
+
+            const width = window.innerWidth; const height = window.innerHeight;
+            renderer.setViewport(0, 0, width / 2, height); renderer.setScissor(0, 0, width / 2, height);
+            const t1 = players[0].mesh.position.clone().add(new THREE.Vector3(0, config.cameraHeight, config.cameraDistance)); camera1.position.lerp(t1, 0.1); camera1.lookAt(players[0].mesh.position); renderer.render(scene, camera1);
+
+            renderer.setViewport(width / 2, 0, width / 2, height); renderer.setScissor(width / 2, 0, width / 2, height);
+            const t2 = players[1].mesh.position.clone().add(new THREE.Vector3(0, config.cameraHeight, config.cameraDistance)); camera2.position.lerp(t2, 0.1); camera2.lookAt(players[1].mesh.position); renderer.render(scene, camera2);
+        }
+
+        function onWindowResize() {
+            const aspect = (window.innerWidth / 2) / window.innerHeight;
+            camera1.aspect = aspect; camera1.updateProjectionMatrix(); camera2.aspect = aspect; camera2.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Банк Золотых Промтов</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script>
+        const { useState, useEffect } = React;
+        
+        // --- API UTILS ---
+        const callGeminiAPI = async (prompt) => {
+            const apiKey = "AIzaSyAeQpz2M7643Nyf3hE9saW-k57WjdrECuw";
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
+                const data = await response.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text;
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        };
+
+        // --- DATA: AI Services ---
+        const AI_SERVICES = [
+            {
+                name: 'ChatGPT (OpenAI)',
+                url: 'https://chat.openai.com',
+                desc: 'Мировой стандарт. Лучше всего справляется со сложными планами уроков и креативом.',
+                color: 'bg-emerald-100 text-emerald-700'
+            },
+            {
+                name: 'Gemini (Google)',
+                url: 'https://gemini.google.com',
+                desc: 'Отлично работает с актуальной информацией и поиском фактов в интернете.',
+                color: 'bg-blue-100 text-blue-700'
+            },
+            {
+                name: 'GigaChat (Сбер)',
+                url: 'https://giga.chat',
+                desc: 'Российская нейросеть. Понимает контекст нашей школы, работает без VPN.',
+                color: 'bg-orange-100 text-orange-700'
+            },
+            {
+                name: 'YandexGPT (Алиса)',
+                url: 'https://ya.ru',
+                desc: 'Доступна на главной Яндекса. Хорошо пишет краткие тексты и объяснения.',
+                color: 'bg-red-100 text-red-700'
+            }
+        ];
+
+        // --- DATA: Prompt Tools ---
+        const PROMPT_TOOLS = [
+            {
+                id: 'test',
+                title: 'Генератор Тестов',
+                color: 'from-indigo-500 to-blue-500',
+                description: 'Создайте проверочный тест с вариантами ответов за секунды.',
+                inputs: [
+                    { id: 'topic', label: 'Тема урока', placeholder: 'Причастия', type: 'text' },
+                    { id: 'grade', label: 'Класс', placeholder: '7 класс', type: 'text' },
+                    { id: 'count', label: 'Количество вопросов', placeholder: '10', type: 'text' }
+                ],
+                generate: (data) => `Действуй как опытный методист. Составь тест по теме "${data.topic || '...'}" для учеников ${data.grade || '...'} класса.
+В тесте должно быть ${data.count || '10'} вопросов.
+Для каждого вопроса предложи 4 варианта ответа, где только один правильный.
+В конце предоставь ключи (правильные ответы) к тесту.`
+            },
+            {
+                id: 'lesson-plan',
+                title: 'План Урока по ФГОС',
+                color: 'from-emerald-500 to-teal-500',
+                description: 'Структурированный план с таймингом, целями и задачами.',
+                inputs: [
+                    { id: 'topic', label: 'Тема урока', placeholder: 'Законы Ньютона', type: 'text' },
+                    { id: 'duration', label: 'Длительность (мин)', placeholder: '45', type: 'text' },
+                    { id: 'goal', label: 'Главная цель', placeholder: 'Понять принцип инерции', type: 'text' }
+                ],
+                generate: (data) => `Напиши подробный план-конспект урока на тему "${data.topic || '...'}" длительностью ${data.duration || '45'} минут.
+Цель урока: ${data.goal || '...'}.
+Структура должна включать:
+1. Организационный момент.
+2. Актуализация знаний.
+3. Объяснение нового материала.
+4. Закрепление (практические задания).
+5. Рефлексия и домашнее задание.`
+            },
+            {
+                id: 'game',
+                title: 'Игровые Механики',
+                color: 'from-violet-500 to-purple-500',
+                description: 'Геймификация сложной темы для вовлечения класса.',
+                inputs: [
+                    { id: 'topic', label: 'Тема для игры', placeholder: 'Таблица умножения', type: 'text' },
+                    { id: 'setting', label: 'Сеттинг (по желанию)', placeholder: 'Космос / Пираты / Детектив', type: 'text' }
+                ],
+                generate: (data) => `Придумай образовательную игру для класса по теме "${data.topic || '...'}".
+${data.setting ? `Используй сеттинг: ${data.setting}.` : ''}
+Опиши правила, необходимый реквизит и механику подсчета очков.`
+            }
+        ];
+
+        // --- COMPONENTS ---
+        function Header() {
+            return React.createElement('header', { className: 'bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm' },
+                React.createElement('div', { className: 'max-w-7xl mx-auto px-6 py-5 flex items-center justify-between' },
+                    React.createElement('div', { className: 'flex items-center gap-4' },
+                        React.createElement('div', { className: 'bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg' },
+                            '✨'
+                        ),
+                        React.createElement('div', null,
+                            React.createElement('h1', { className: 'text-2xl md:text-3xl font-extrabold text-slate-900' },
+                                'Банк ',
+                                React.createElement('span', { className: 'text-indigo-600' }, 'Золотых'),
+                                ' Промтов'
+                            ),
+                            React.createElement('p', { className: 'text-sm text-slate-500 font-medium mt-1' },
+                                'Библиотека команд для нейросетей'
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        function Hero() {
+            return React.createElement('div', { className: 'bg-gradient-to-b from-indigo-50 via-white to-white py-20 px-6 text-center' },
+                React.createElement('div', { className: 'max-w-4xl mx-auto' },
+                    React.createElement('h2', { className: 'text-4xl md:text-6xl font-black text-slate-900 mb-6' },
+                        'Ваш личный методист ',
+                        React.createElement('br', null),
+                        React.createElement('span', { className: 'text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600' },
+                            'на базе Искусственного Интеллекта'
+                        )
+                    ),
+                    React.createElement('p', { className: 'text-xl text-slate-600 mb-10' },
+                        'Генерируйте тесты, планы уроков и игры для класса за секунды!'
+                    )
+                )
+            );
+        }
+
+        function Modal({ tool, onClose }) {
+            const [inputs, setInputs] = useState({});
+            const [copied, setCopied] = useState(false);
+            const [generatedPrompt, setGeneratedPrompt] = useState(tool.generate({}));
+            const [aiResult, setAiResult] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [aiError, setAiError] = useState(null);
+
+            const handleInputChange = (id, value) => {
+                const newInputs = { ...inputs, [id]: value };
+                setInputs(newInputs);
+                setGeneratedPrompt(tool.generate(newInputs));
+                setCopied(false);
+            };
+
+            const handleCopy = () => {
+                navigator.clipboard.writeText(generatedPrompt);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            };
+
+            const handleGenerateAI = async () => {
+                setIsLoading(true);
+                setAiError(null);
+                setAiResult('');
+                
+                try {
+                    const result = await callGeminiAPI(generatedPrompt);
+                    if (result) {
+                        setAiResult(result);
+                    } else {
+                        setAiError('Не удалось получить ответ. Попробуйте еще раз.');
+                    }
+                } catch (err) {
+                    setAiError('Ошибка: ' + err.message);
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            return React.createElement('div', { className: 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md', onClick: onClose },
+                React.createElement('div', { className: 'bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden', onClick: (e) => e.stopPropagation() },
+                    React.createElement('div', { className: `p-6 bg-gradient-to-r ${tool.color} text-white flex justify-between items-start shrink-0` },
+                        React.createElement('div', null,
+                            React.createElement('h3', { className: 'text-xl font-bold' }, tool.title),
+                            React.createElement('p', { className: 'text-white/90 text-sm mt-0.5' }, tool.description)
+                        ),
+                        React.createElement('button', { onClick: onClose, className: 'text-white/70 hover:text-white font-bold text-2xl' }, '×')
+                    ),
+                    React.createElement('div', { className: 'flex flex-col lg:flex-row h-full overflow-hidden bg-slate-50' },
+                        React.createElement('div', { className: 'w-full lg:w-1/2 p-6 overflow-y-auto border-r border-slate-200' },
+                            React.createElement('div', { className: 'space-y-4 mb-6' },
+                                tool.inputs.map((input, idx) =>
+                                    React.createElement('div', { key: idx },
+                                        React.createElement('label', { className: 'block text-xs font-bold text-slate-700 mb-1.5' },
+                                            input.label
+                                        ),
+                                        input.type === 'textarea' 
+                                            ? React.createElement('textarea', { placeholder: input.placeholder, className: 'w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-4 focus:ring-indigo-100 outline-none min-h-[100px]', onChange: (e) => handleInputChange(input.id, e.target.value) })
+                                            : React.createElement('input', { type: 'text', placeholder: input.placeholder, className: 'w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-4 focus:ring-indigo-100 outline-none', onChange: (e) => handleInputChange(input.id, e.target.value) })
+                                    )
+                                )
+                            ),
+                            React.createElement('div', { className: 'bg-white p-4 rounded-xl border-2 border-indigo-100 text-slate-600 font-mono text-xs whitespace-pre-wrap mb-6' },
+                                generatedPrompt
+                            ),
+                            React.createElement('div', { className: 'flex gap-3' },
+                                React.createElement('button', { onClick: handleCopy, className: `flex-1 px-4 py-3 rounded-xl font-bold transition-all ${copied ? 'bg-green-100 text-green-700' : 'bg-white text-slate-700 border border-slate-200'}` },
+                                    copied ? '✓ Скопировано!' : '📋 Копировать'
+                                ),
+                                React.createElement('button', { onClick: handleGenerateAI, disabled: isLoading, className: 'flex-1.5 px-6 py-3 rounded-xl font-bold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 disabled:opacity-50' },
+                                    isLoading ? '⏳ Генерирую...' : '▶ Спросить у ИИ'
+                                )
+                            )
+                        ),
+                        React.createElement('div', { className: 'w-full lg:w-1/2 bg-white flex flex-col' },
+                            React.createElement('div', { className: 'p-4 border-b border-slate-100 bg-slate-50 font-bold text-slate-700' },
+                                '🤖 Ответ ИИ'
+                            ),
+                            React.createElement('div', { className: 'flex-grow p-6 overflow-y-auto' },
+                                !aiResult && !isLoading && !aiError ? React.createElement('div', { className: 'h-full flex items-center justify-center text-slate-400 text-center' }, 'Нажмите «Спросить у ИИ», чтобы получить результат') : null,
+                                isLoading ? React.createElement('div', { className: 'h-full flex items-center justify-center text-indigo-600' }, '⏳ ИИ думает...') : null,
+                                aiError ? React.createElement('div', { className: 'h-full flex items-center justify-center text-red-500 text-center' }, '❌ ' + aiError) : null,
+                                aiResult ? React.createElement('div', { className: 'whitespace-pre-wrap text-slate-800 leading-relaxed' }, aiResult) : null
+                            )
+                        )
+                    )
+                )
+            );
+        }
+
+        function ToolCard({ tool, onClick }) {
+            return React.createElement('button', { onClick, className: 'group bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all text-left flex flex-col h-full' },
+                React.createElement('div', { className: 'mb-6 inline-flex p-4 rounded-2xl bg-slate-50' },
+                    '📚'
+                ),
+                React.createElement('h3', { className: 'text-2xl font-bold text-slate-800 mb-3' }, tool.title),
+                React.createElement('p', { className: 'text-slate-500 mb-6 flex-grow' }, tool.description),
+                React.createElement('div', { className: 'flex items-center text-indigo-600 font-bold' }, 'Создать промт →')
+            );
+        }
+
+        function App() {
+            const [selectedTool, setSelectedTool] = useState(null);
+
+            return React.createElement('div', { className: 'min-h-screen bg-white font-sans text-slate-900 pb-20' },
+                React.createElement(Header),
+                React.createElement(Hero),
+                React.createElement('main', { className: 'max-w-7xl mx-auto px-6 -mt-10 mb-20' },
+                    React.createElement('div', { className: 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8' },
+                        PROMPT_TOOLS.map((tool) =>
+                            React.createElement(ToolCard, { key: tool.id, tool, onClick: () => setSelectedTool(tool) })
+                        )
+                    )
+                ),
+                React.createElement('footer', { className: 'py-12 bg-white text-center border-t border-slate-100' },
+                    React.createElement('p', { className: 'text-slate-500' }, '© 2024 Банк Золотых Промтов. Создано для помощи учителям.')
+                ),
+                selectedTool ? React.createElement(Modal, { tool: selectedTool, onClose: () => setSelectedTool(null) }) : null
+            );
+        }
+
+        ReactDOM.render(React.createElement(App), document.getElementById('root'));
+    </script>
+</body>
+</html>

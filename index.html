@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Менің Портфолио Жобаларым</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4A90E2;
+            --secondary-color: #50E3C2;
+            --text-color: #333;
+            --bg-color: #f0f2f5;
+            --card-bg: #ffffff;
+            --shadow-light: 0 4px 15px rgba(0, 0, 0, 0.05);
+            --shadow-medium: 0 6px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start; /* Align items to the start, not center for better scroll experience */
+            min-height: 100vh; /* Use min-height to allow content to push the footer down */
+            padding-top: 40px; /* Add some top padding */
+            box-sizing: border-box;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 960px;
+            padding: 20px;
+            box-sizing: border-box;
+            animation: fadeIn 1s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 10px;
+            box-shadow: var(--shadow-medium);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 2.8em;
+            letter-spacing: 1px;
+        }
+
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+            margin-top: 10px;
+        }
+
+        .project-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+        }
+
+        .project-card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            box-shadow: var(--shadow-light);
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .project-card:hover {
+            transform: translateY(-8px);
+            box-shadow: var(--shadow-medium);
+        }
+
+        .project-card a {
+            text-decoration: none;
+            color: var(--text-color);
+            padding: 20px;
+            display: block;
+            flex-grow: 1;
+        }
+
+        .project-card h2 {
+            margin-top: 0;
+            margin-bottom: 10px;
+            color: var(--primary-color);
+            font-size: 1.5em;
+            border-bottom: 2px solid var(--secondary-color);
+            padding-bottom: 5px;
+            display: inline-block; /* To make border-bottom only as wide as the text */
+        }
+
+        .project-card p {
+            font-size: 0.95em;
+            color: #555;
+            margin-bottom: 0;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px 20px;
+            margin-top: 60px;
+            color: #777;
+            font-size: 0.9em;
+            border-top: 1px solid #e0e0e0;
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            box-shadow: var(--shadow-light);
+            animation: fadeIn 1s ease-out 0.5s backwards; /* Delayed animation */
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 2.2em;
+            }
+            .project-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 480px) {
+            header h1 {
+                font-size: 1.8em;
+            }
+            body {
+                padding-top: 20px;
+            }
+            .container {
+                padding: 15px;
+            }
+            .project-card h2 {
+                font-size: 1.3em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Менің Цифрлық Жобаларым</h1>
+            <p>Менің жасаған ойындарым мен интерактивті жобаларымның топтамасы.</p>
+        </header>
+
+        <section class="project-grid">
+            <div class="project-card">
+                <a href="aiprojects_working.html">
+                    <h2>AI Жобалар</h2>
+                    <p>Жасанды интеллектпен жұмыс істеген жобаларым.</p>
+                </a>
+            </div>
+
+            <div class="project-card">
+                <a href="codebatle.html">
+                    <h2>Code Battle 1</h2>
+                    <p>Кодтау бойынша бірінші жарысқа арналған жоба.</p>
+                </a>
+            </div>
+
+            <div class="project-card">
+                <a href="codebattletwo.html">
+                    <h2>Code Battle 2</h2>
+                    <p>Кодтау бойынша екінші жарысқа арналған жоба.</p>
+                </a>
+            </div>
+
+            <div class="project-card">
+                <a href="footbal.html">
+                    <h2>Футбол Ойыны</h2>
+                    <p>Футбол тақырыбындағы шағын интерактивті ойын.</p>
+                </a>
+            </div>
+
+            <div class="project-card">
+                <a href="game.html">
+                    <h2>Ойын 1</h2>
+                    <p>Жасаған алғашқы қарапайым ойындарымның бірі.</p>
+                </a>
+            </div>
+
+            <div class="project-card">
+                <a href="game2.html">
+                    <h2>Ойын 2</h2>
+                    <p>Келесі деңгейдегі ойын жобасы.</p>
+                </a>
+            </div>
+
+            <div class="project-card">
+                <a href="game3.html">
+                    <h2>Ойын 3</h2>
+                    <p>Соңғы және ең күрделі ойын жобасы.</p>
+                </a>
+            </div>
+            </section>
+
+        <footer>
+            <p>&copy; 2026 Менің Портфолио Жобаларым. Барлық құқықтар қорғалған.</p>
+        </footer>
+    </div>
+</body>
+</html>

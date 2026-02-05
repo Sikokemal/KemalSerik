@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Battle RPG: Speed Duel</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@400;700&display=swap');
+
+        body {
+            margin: 0;
+            background-color: #0b0c10;
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            color: white;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            box-shadow: 0 0 50px rgba(102, 252, 241, 0.2);
+            border: 2px solid #45a29e;
+            border-radius: 8px;
+        }
+
+        canvas {
+            background-color: #1f2833;
+            border-radius: 8px;
+            display: block;
+        }
+
+        #controls-hint {
+            margin-top: 10px;
+            color: #888;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .key {
+            display: inline-block;
+            background: #333;
+            border: 1px solid #66fcf1;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #66fcf1;
+            font-family: monospace;
+            margin: 0 2px;
+        }
+
+        /* Hide default HTML modal - we use Canvas now */
+        #quiz-modal { display: none; }
+        #skinInput { display: none; }
+        
+        #notification {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 40px;
+            text-align: center;
+            text-shadow: 0 0 20px black;
+            pointer-events: none;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="900" height="600"></canvas>
+    <div id="notification"></div>
+    <input type="file" id="skinInput" accept="image/*">
+</div>
+
+<div id="controls-hint">
+    ОЙЫНШЫ 1: <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span> &nbsp;|&nbsp; 
+    ОЙЫНШЫ 2: <span class="key">↑</span><span class="key">←</span><span class="key">↓</span><span class="key">→</span>
+</div>
+
+<script>
+/**
+ * CYBER BATTLE RPG: SPEED DUEL EDITION
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const notificationDiv = document.getElementById('notification');
+const skinInput = document.getElementById('skinInput');
+
+// --- GAME STATES ---
+const STATE = {
+    SELECTION: 0,
+    COUNTDOWN: 1,    // "3... 2... 1..."
+    RACE_QUIZ: 2,    // Both players answering at once
+    SELECT_ACTION: 3,// Winner selects move
+    ANIMATION: 4,
+    GAME_OVER: 5
+};
+
+let currentState = STATE.SELECTION;
+let activePlayer = 0; // 1 or 2 (Winner of the quiz)
+let selectedAttacker = null;
+let selectedAbility = null;
+let animationData = null; 
+let heroToCustomize = null;
+let particles = [];
+let damageNumbers = []; 
+let screenShake = 0; 
+let abilityButtons = []; 
+
+// Quiz State Variables
+let currentQuestion = null;
+let p1Locked = false;
+let p2Locked = false;
+let p1LockTimer = 0;
+let p2LockTimer = 0;
+let countdownTimer = 0;
+
+// --- ASSETS ---
+function createSkin(color, emoji) {
+    const svg = `
+    <svg width="64" height="64" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <filter id="glow">
+                <feGaussianBlur stdDeviation="2.5" result="coloredBlur"/>
+                <feMerge>
+                    <feMergeNode in="coloredBlur"/>
+                    <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+            </filter>
+        </defs>
+        <circle cx="32" cy="32" r="28" fill="${color}" stroke="white" stroke-width="2" filter="url(#glow)"/>
+        <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" font-size="30">${emoji}</text>
+    </svg>`;
+    return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+}
+
+// --- DATA ---
+const questions = [
+    { q: "HTML дегеніміз не?", options: ["Бағдарламалау тілі", "Гипермәтіндік тіл", "Деректер қоры", "Операциялық жүйе"], correct: 1 },
+    { q: "CSS не үшін қолданылады?", options: ["Стиль жасау", "Сервер басқару", "Логика жазу", "Мәлімет сақтау"], correct: 0 },
+    { q: "Айнымалыны қалай жариялаймыз?", options: ["function x", "let x", "div x", "model x"], correct: 1 },
+    { q: "Массивтің бірінші индексі?", options: ["1", "-1", "0", "null"], correct: 2 },
+    { q: "DOM дегеніміз не?", options: ["Data Model", "Document Object", "Digital Order", "Disk Operating"], correct: 1 },
+    { q: "Тұрақты айнымалы (constant)?", options: ["var", "let", "const", "static"], correct: 2 },
+    { q: "Цикл түрі емес?", options: ["for", "while", "if", "do-while"], correct: 2 }
+];
+
+const heroPool = [
+    { name: "Cyber Warrior", role: "melee", maxHp: 150, damage: 25, superName: "MEGA SLASH", src: createSkin("#e74c3c", "⚔️") },
+    { name: "Neo Hacker", role: "melee", maxHp: 110, damage: 40, superName: "CRIT HIT", src: createSkin("#8e44ad", "🥷") },
+    { name: "Firewall", role: "melee", maxHp: 200, damage: 15, superName: "BASH", src: createSkin("#34495e", "🛡️") },
+    { name: "Script Mage", role: "ranged", maxHp: 90, damage: 50, superName: "FIREBALL", src: createSkin("#f1c40f", "⚡") },
+    { name: "Healer Bot", role: "ranged", maxHp: 120, damage: -35, superName: "REPAIR", src: createSkin("#2ecc71", "❤️") },
+    { name: "Bug Hunter", role: "ranged", maxHp: 130, damage: 35, superName: "SNIPE", src: createSkin("#e67e22", "🏹") }
+];
+
+heroPool.forEach(hero => {
+    const img = new Image();
+    img.src = hero.src;
+    hero.image = img;
+});
+
+// --- CLASSES ---
+class Particle {
+    constructor(x, y, color, speedMulti = 1, type = 'spark') {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = (Math.random() * 3 + 1) * speedMulti;
+        this.vx = Math.cos(angle) * speed;
+        this.vy = Math.sin(angle) * speed;
+        this.life = 1.0; 
+        this.decay = Math.random() * 0.03 + 0.02;
+        this.type = type; 
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= this.decay;
+    }
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        if(this.type === 'slash') ctx.fillRect(this.x, this.y, 20, 2);
+        else ctx.fillRect(this.x, this.y, 3, 3);
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+class DamageText {
+    constructor(x, y, text, color = "#e74c3c") {
+        this.x = x;
+        this.y = y;
+        this.text = text;
+        this.color = color;
+        this.vy = -2;
+        this.life = 1.0;
+    }
+    update() {
+        this.y += this.vy;
+        this.life -= 0.015;
+    }
+    draw(ctx) {
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.fillStyle = this.color;
+        ctx.font = "bold 24px 'Orbitron'";
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = 3;
+        ctx.strokeText(this.text, this.x, this.y);
+        ctx.fillText(this.text, this.x, this.y);
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+class Character {
+    constructor(template, team, x, y) {
+        this.name = template.name;
+        this.role = template.role; 
+        this.superName = template.superName;
+        this.hp = template.maxHp;
+        this.maxHp = template.maxHp;
+        this.baseDamage = template.damage;
+        this.image = template.image; 
+        this.team = team;
+        this.baseX = x;
+        this.baseY = y;
+        this.x = x;
+        this.y = y;
+        this.radius = 30;
+        this.size = 64;
+        this.isDead = false;
+        this.highlight = false;
+        this.hitFlash = 0; 
+        this.idleOffset = Math.random() * 1000; 
+    }
+
+    draw() {
+        if (this.isDead) return;
+
+        if (currentState !== STATE.ANIMATION || this !== animationData?.attacker) {
+             const floatY = Math.sin((Date.now() + this.idleOffset) / 500) * 5;
+             this.y = this.baseY + floatY;
+             this.x = this.baseX; 
+        }
+
+        if (this.highlight) {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius + 15, 0, Math.PI * 2);
+            ctx.fillStyle = this.team === 1 ? "rgba(102, 252, 241, 0.3)" : "rgba(231, 76, 60, 0.3)";
+            ctx.fill();
+            ctx.strokeStyle = this.team === 1 ? "#66fcf1" : "#e74c3c";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        if (this.image && this.image.complete) {
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = this.team === 1 ? "#45a29e" : "#c0392b";
+            
+            // --- НОВАЯ ЛОГИКА: ОТЗЕРКАЛИВАНИЕ ДЛЯ 2-ГО ИГРОКА ---
+            ctx.save();
+            if (this.team === 2) {
+                // Сдвигаем контекст в центр персонажа
+                ctx.translate(this.x, this.y);
+                // Отзеркаливаем по горизонтали
+                ctx.scale(-1, 1);
+                // Рисуем картинку (теперь координаты 0,0 - это центр)
+                ctx.drawImage(this.image, -this.size/2, -this.size/2, this.size, this.size);
+            } else {
+                // Обычная отрисовка для 1-го игрока
+                ctx.drawImage(this.image, this.x - this.size/2, this.y - this.size/2, this.size, this.size);
+            }
+            ctx.restore();
+            // -----------------------------------------------------
+            
+            ctx.shadowBlur = 0;
+        } else {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = "gray";
+            ctx.fill();
+        }
+
+        if (this.hitFlash > 0) {
+            ctx.globalCompositeOperation = "source-over";
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${this.hitFlash})`;
+            ctx.fill();
+            this.hitFlash -= 0.1;
+        }
+
+        const barWidth = 70;
+        const barY = this.y - this.size/2 - 15;
+        ctx.fillStyle = "black";
+        ctx.fillRect(this.x - barWidth/2 - 2, barY - 2, barWidth + 4, 10);
+        const hpPercent = Math.max(0, this.hp / this.maxHp);
+        const hpColor = hpPercent > 0.5 ? "#2ecc71" : (hpPercent > 0.25 ? "#f1c40f" : "#e74c3c");
+        ctx.fillStyle = hpColor;
+        ctx.fillRect(this.x - barWidth/2, barY, barWidth * hpPercent, 6);
+
+        ctx.fillStyle = "#c5c6c7";
+        ctx.font = "12px 'Orbitron'";
+        ctx.textAlign = "center";
+        ctx.fillText(this.name, this.x, this.y + this.size/2 + 20);
+    }
+    
+    takeDamage(amount) {
+        if (amount < 0) {
+            this.hp -= amount; 
+            if(this.hp > this.maxHp) this.hp = this.maxHp;
+            damageNumbers.push(new DamageText(this.x, this.y - 40, "+" + Math.abs(amount), "#2ecc71"));
+            for(let i=0; i<15; i++) particles.push(new Particle(this.x, this.y, "#2ecc71"));
+            return;
+        }
+
+        this.hp -= amount;
+        this.hitFlash = 1.0; 
+        damageNumbers.push(new DamageText(this.x, this.y - 40, "-" + amount));
+        
+        if (this.hp <= 0) {
+            this.hp = 0;
+            this.isDead = true;
+            for(let i=0; i<30; i++) particles.push(new Particle(this.x, this.y, "#e74c3c"));
+        }
+    }
+}
+
+let team1 = [];
+let team2 = [];
+let selectionPoolButtons = [];
+
+// --- BACKGROUND ---
+function drawBackground() {
+    ctx.fillStyle = "#0b0c10";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = "rgba(69, 162, 158, 0.2)";
+    ctx.lineWidth = 1;
+    const horizon = canvas.height * 0.4;
+    const time = Date.now() / 50; 
+
+    ctx.beginPath();
+    for (let x = -canvas.width; x < canvas.width * 2; x += 100) {
+        ctx.moveTo(x, canvas.height);
+        ctx.lineTo(canvas.width / 2, horizon);
+    }
+    for (let y = horizon; y < canvas.height; y += 20) {
+        const offset = (time % 20);
+        const drawY = y + offset;
+        if(drawY < canvas.height) {
+            ctx.moveTo(0, drawY);
+            ctx.lineTo(canvas.width, drawY);
+        }
+    }
+    ctx.stroke();
+}
+
+// --- FILE UPLOAD (ИЗМЕНЕНИЕ СКИНОВ) ---
+skinInput.addEventListener('change', function(e) {
+    if (e.target.files && e.target.files[0] && heroToCustomize) {
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                heroToCustomize.image = img; 
+                if (currentState === STATE.SELECTION) drawSelectionPhase();
+            }
+            img.src = event.target.result;
+        }
+        reader.readAsDataURL(e.target.files[0]);
+    }
+    skinInput.value = '';
+});
+
+// --- SELECTION UI ---
+function initSelectionPhase() {
+    let startX = 130;
+    let startY = 220;
+    heroPool.forEach((hero, index) => {
+        selectionPoolButtons.push({
+            x: startX + (index * 110),
+            y: startY,
+            w: 100,
+            h: 150,
+            hero: hero,
+            selected: false,
+            // Кнопка загрузки скина
+            uploadBtn: { x: startX + (index * 110) + 70, y: startY + 5, w: 25, h: 25 }
+        });
+    });
+}
+
+function drawSelectionPhase() {
+    drawBackground();
+    ctx.fillStyle = "#66fcf1";
+    ctx.font = "bold 40px 'Orbitron'";
+    ctx.textAlign = "center";
+    let currentPlayerName = activePlayer === 0 ? "PLAYER 1 (Blue)" : "PLAYER 2 (Red)"; 
+    if(team1.length < 3) currentPlayerName = "PLAYER 1 (Blue)";
+    else currentPlayerName = "PLAYER 2 (Red)";
+
+    ctx.fillText("TEAM SELECT", canvas.width/2, 100);
+    ctx.font = "20px 'Roboto'";
+    ctx.fillStyle = team1.length < 3 ? "#66fcf1" : "#e74c3c";
+    ctx.fillText("Таңдау: " + currentPlayerName, canvas.width/2, 140);
+    ctx.fillStyle = "#fff";
+    ctx.font = "14px 'Roboto'";
+    ctx.fillText("📷 - басып, скин өзгертуге болады!", canvas.width/2, 170);
+
+    selectionPoolButtons.forEach(btn => {
+        ctx.fillStyle = btn.selected ? "#1f2833" : "rgba(11, 12, 16, 0.7)";
+        ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
+        ctx.strokeStyle = btn.selected ? "#45a29e" : "#66fcf1";
+        ctx.lineWidth = btn.selected ? 3 : 1;
+        ctx.strokeRect(btn.x, btn.y, btn.w, btn.h);
+
+        if (btn.hero.image && btn.hero.image.complete) {
+            ctx.drawImage(btn.hero.image, btn.x + 18, btn.y + 10, 64, 64);
+        }
+
+        // Рисуем кнопку загрузки только если не выбран
+        if (!btn.selected) {
+            ctx.fillStyle = "#45a29e";
+            ctx.fillRect(btn.uploadBtn.x, btn.uploadBtn.y, btn.uploadBtn.w, btn.uploadBtn.h);
+            ctx.fillStyle = "black";
+            ctx.font = "16px Arial";
+            ctx.fillText("📷", btn.uploadBtn.x + 12.5, btn.uploadBtn.y + 18);
+        }
+
+        ctx.fillStyle = "#fff";
+        ctx.font = "bold 12px 'Orbitron'";
+        ctx.textAlign = "center";
+        ctx.fillText(btn.hero.name, btn.x + btn.w/2, btn.y + 90);
+        ctx.font = "10px 'Roboto'";
+        ctx.fillStyle = "#c5c6c7";
+        ctx.fillText(btn.hero.role.toUpperCase(), btn.x + btn.w/2, btn.y + 110);
+        ctx.fillText("HP:" + btn.hero.maxHp, btn.x + btn.w/2, btn.y + 125);
+    });
+}
+
+function handleSelectionClick(x, y) {
+    for (let btn of selectionPoolButtons) {
+        if (btn.selected) continue;
+
+        // Проверка клика на кнопку загрузки скина
+        if (x >= btn.uploadBtn.x && x <= btn.uploadBtn.x + btn.uploadBtn.w && 
+            y >= btn.uploadBtn.y && y <= btn.uploadBtn.y + btn.uploadBtn.h) {
+            heroToCustomize = btn.hero;
+            skinInput.click(); 
+            return;
+        }
+
+        // Проверка клика на карточку героя
+        if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+            btn.selected = true;
+            for(let i=0; i<10; i++) particles.push(new Particle(x, y, "#66fcf1"));
+
+            if (team1.length < 3) {
+                let posY = 180 + (team1.length * 130);
+                team1.push(new Character(btn.hero, 1, 150, posY));
+            } else {
+                let posY = 180 + (team2.length * 130);
+                team2.push(new Character(btn.hero, 2, 750, posY));
+                if (team2.length === 3) startBattle();
+            }
+            break;
+        }
+    }
+}
+
+// --- BATTLE LOGIC ---
+function startBattle() {
+    currentState = STATE.COUNTDOWN;
+    countdownTimer = 3;
+    let interval = setInterval(() => {
+        countdownTimer--;
+        if (countdownTimer <= 0) {
+            clearInterval(interval);
+            startRaceRound();
+        }
+    }, 1000);
+}
+
+function startRaceRound() {
+    // Generate new question
+    const qIndex = Math.floor(Math.random() * questions.length);
+    currentQuestion = questions[qIndex];
+    
+    // Reset locks
+    p1Locked = false;
+    p2Locked = false;
+    
+    currentState = STATE.RACE_QUIZ;
+    showNotification("ЖЫЛДАМДЫҚ! (SPEED)", "white");
+}
+
+function handleQuizInput(key) {
+    if (currentState !== STATE.RACE_QUIZ) return;
+    
+    const p1Keys = ['KeyW', 'KeyA', 'KeyS', 'KeyD'];
+    const p2Keys = ['ArrowUp', 'ArrowLeft', 'ArrowDown', 'ArrowRight'];
+    
+    let p1Index = p1Keys.indexOf(key);
+    let p2Index = p2Keys.indexOf(key);
+
+    if (p1Index !== -1 && !p1Locked) {
+        checkRaceAnswer(1, p1Index);
+    }
+    
+    if (p2Index !== -1 && !p2Locked) {
+        checkRaceAnswer(2, p2Index);
+    }
+}
+
+function checkRaceAnswer(player, index) {
+    if (index === currentQuestion.correct) {
+        // WINNER!
+        activePlayer = player;
+        showNotification(`ОЙЫНШЫ ${player} ЖЕҢДІ!`, player === 1 ? "#66fcf1" : "#e74c3c");
+        screenShake = 10;
+        currentState = STATE.SELECT_ACTION;
+        selectedAttacker = null;
+        selectedAbility = null;
+    } else {
+        // WRONG! Lock player
+        if (player === 1) {
+            p1Locked = true;
+            p1LockTimer = Date.now() + 2000; // 2s lock
+        } else {
+            p2Locked = true;
+            p2LockTimer = Date.now() + 2000;
+        }
+        screenShake = 5;
+    }
+}
+
+// --- DRAWING THE RACE QUIZ ---
+function drawRaceQuiz() {
+    // Draw Modal Background
+    const w = 600, h = 400;
+    const x = (canvas.width - w)/2;
+    const y = (canvas.height - h)/2;
+    
+    ctx.fillStyle = "rgba(11, 12, 16, 0.95)";
+    ctx.strokeStyle = "#66fcf1";
+    ctx.lineWidth = 2;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x, y, w, h);
+
+    // Question
+    ctx.fillStyle = "white";
+    ctx.font = "bold 20px 'Roboto'";
+    ctx.textAlign = "center";
+    ctx.fillText(currentQuestion.q, canvas.width/2, y + 50);
+
+    // Options
+    const optW = 250;
+    const optH = 50;
+    
+    const keysP1 = ['W', 'A', 'S', 'D'];
+    const keysP2 = ['↑', '←', '↓', '→'];
+
+    currentQuestion.options.forEach((opt, i) => {
+        let optY = y + 100 + (i * 65);
+        
+        // Option Box
+        ctx.fillStyle = "#1f2833";
+        ctx.fillRect(canvas.width/2 - optW/2, optY, optW, optH);
+        ctx.strokeStyle = "#45a29e";
+        ctx.strokeRect(canvas.width/2 - optW/2, optY, optW, optH);
+        
+        ctx.fillStyle = "#66fcf1";
+        ctx.font = "16px 'Roboto'";
+        ctx.fillText(opt, canvas.width/2, optY + 30);
+
+        // Key Hints
+        // P1 (Left side)
+        ctx.fillStyle = p1Locked ? "#555" : "#e74c3c"; 
+        ctx.font = "bold 20px monospace";
+        ctx.fillText(keysP1[i], canvas.width/2 - optW/2 - 30, optY + 30);
+        
+        // P2 (Right side)
+        ctx.fillStyle = p2Locked ? "#555" : "#e74c3c";
+        ctx.fillText(keysP2[i], canvas.width/2 + optW/2 + 30, optY + 30);
+    });
+
+    // Lock Timers
+    if (p1Locked) {
+        ctx.fillStyle = "red";
+        ctx.font = "bold 30px 'Orbitron'";
+        ctx.fillText("LOCKED", 100, canvas.height/2);
+    }
+    if (p2Locked) {
+        ctx.fillStyle = "red";
+        ctx.font = "bold 30px 'Orbitron'";
+        ctx.fillText("LOCKED", canvas.width - 100, canvas.height/2);
+    }
+}
+
+// --- INTERACTION (ACTION PHASE) ---
+function handleActionClick(x, y) {
+    if (currentState !== STATE.SELECT_ACTION) return;
+
+    const currentTeam = activePlayer === 1 ? team1 : team2;
+    const enemyTeam = activePlayer === 1 ? team2 : team1;
+
+    // 1. Select Attacker
+    if (!selectedAttacker) {
+        for (let char of currentTeam) {
+            if (!char.isDead && Math.hypot(char.x - x, char.y - y) < char.radius + 10) {
+                selectedAttacker = char;
+                char.highlight = true;
+                createAbilityButtons(char);
+                return;
+            }
+        }
+    } 
+    // 2. Select Ability
+    else if (!selectedAbility) {
+        for (let btn of abilityButtons) {
+            if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+                selectedAbility = btn.type; 
+                showNotification(selectedAbility === 'super' ? "SUPER!" : "TARGET!", "#f1c40f");
+                return;
+            }
+        }
+        // Cancel selection
+        if(Math.hypot(selectedAttacker.x - x, selectedAttacker.y - y) > 100) {
+            selectedAttacker.highlight = false;
+            selectedAttacker = null;
+        }
+    }
+    // 3. Select Target
+    else {
+        let targets = (selectedAttacker.name === "Healer Bot" && selectedAbility === 'super') ? currentTeam : enemyTeam;
+        for (let target of targets) {
+            if (!target.isDead && Math.hypot(target.x - x, target.y - y) < target.radius + 10) {
+                selectedAttacker.highlight = false;
+                startAnimation(selectedAttacker, target, selectedAbility);
+                return;
+            }
+        }
+    }
+}
+
+function createAbilityButtons(char) {
+    abilityButtons = [];
+    const btnW = 100;
+    const btnH = 30;
+    abilityButtons.push({ 
+        text: "⚔️ Attack", type: 'basic', 
+        x: char.x - btnW - 5, y: char.y - 80, w: btnW, h: btnH, color: "#e74c3c" 
+    });
+    abilityButtons.push({ 
+        text: "⚡ " + char.superName, type: 'super', 
+        x: char.x + 5, y: char.y - 80, w: btnW, h: btnH, color: "#f1c40f" 
+    });
+}
+
+// --- ANIMATION ---
+function startAnimation(attacker, target, abilityType) {
+    currentState = STATE.ANIMATION;
+    
+    let dmg = attacker.baseDamage;
+    let color = attacker.team === 1 ? "#66fcf1" : "#e74c3c";
+    let isHeal = false;
+
+    if (abilityType === 'super') {
+        if (attacker.role === 'melee') dmg *= 2; 
+        else if (attacker.name === 'Script Mage') { dmg *= 1.5; color = "#f1c40f"; } 
+        else if (attacker.name === 'Healer Bot') { isHeal = true; dmg = -50; } 
+        else if (attacker.name === 'Bug Hunter') { dmg *= 1.5; }
+    } else {
+        if (attacker.name === 'Healer Bot') dmg = 10; 
+    }
+
+    if (attacker.role === 'melee') {
+        animationData = {
+            type: 'melee',
+            stage: 'forward',
+            attacker: attacker,
+            target: target,
+            damage: dmg,
+            startX: attacker.x,
+            startY: attacker.y,
+            speed: 25
+        };
+    } else {
+        animationData = {
+            type: 'ranged',
+            attacker: attacker,
+            target: target,
+            damage: dmg,
+            x: attacker.x,
+            y: attacker.y,
+            speed: 20,
+            color: color,
+            isHeal: isHeal
+        };
+    }
+}
+
+function updateAnimation() {
+    if (!animationData) return;
+
+    if (animationData.type === 'melee') {
+        const att = animationData.attacker;
+        const tar = animationData.target;
+        
+        if (animationData.stage === 'forward') {
+            const dx = tar.x - att.x;
+            const dy = tar.y - att.y;
+            const dist = Math.hypot(dx, dy);
+            
+            if (dist < 40) {
+                tar.takeDamage(animationData.damage);
+                screenShake = 10;
+                for(let i=0; i<10; i++) particles.push(new Particle(tar.x, tar.y, "#fff", 2, 'slash'));
+                animationData.stage = 'back';
+            } else {
+                const angle = Math.atan2(dy, dx);
+                att.x += Math.cos(angle) * animationData.speed;
+                att.y += Math.sin(angle) * animationData.speed;
+            }
+        } else if (animationData.stage === 'back') {
+            const dx = animationData.startX - att.x;
+            const dy = animationData.startY - att.y;
+            const dist = Math.hypot(dx, dy);
+            
+            if (dist < animationData.speed) {
+                att.x = animationData.startX;
+                att.y = animationData.startY;
+                animationData = null;
+                endTurn();
+            } else {
+                const angle = Math.atan2(dy, dx);
+                att.x += Math.cos(angle) * animationData.speed;
+                att.y += Math.sin(angle) * animationData.speed;
+            }
+        }
+    } else {
+        const p = animationData;
+        const dx = p.target.x - p.x;
+        const dy = p.target.y - p.y;
+        const dist = Math.hypot(dx, dy);
+
+        particles.push(new Particle(p.x, p.y, p.color)); 
+
+        if (dist < p.speed) {
+            p.target.takeDamage(p.damage);
+            if (!p.isHeal) screenShake = 8;
+            for(let i=0; i<15; i++) particles.push(new Particle(p.target.x, p.target.y, p.isHeal ? "#2ecc71" : "#fff"));
+            animationData = null;
+            endTurn();
+        } else {
+            const angle = Math.atan2(dy, dx);
+            p.x += Math.cos(angle) * p.speed;
+            p.y += Math.sin(angle) * p.speed;
+        }
+    }
+}
+
+function endTurn() {
+    if (team1.every(c => c.isDead)) { endGame(2); return; }
+    if (team2.every(c => c.isDead)) { endGame(1); return; }
+    
+    // Start next round immediately
+    setTimeout(() => {
+        startBattle(); // Go back to countdown
+    }, 1000);
+}
+
+// --- DRAWING ---
+function drawBattle() {
+    ctx.save();
+    if (screenShake > 0) {
+        ctx.translate((Math.random() - 0.5) * screenShake, (Math.random() - 0.5) * screenShake);
+    }
+    drawBackground();
+
+    team1.forEach(c => c.draw());
+    team2.forEach(c => c.draw());
+
+    if (currentState === STATE.RACE_QUIZ) {
+        drawRaceQuiz();
+    } 
+    else if (currentState === STATE.COUNTDOWN) {
+        ctx.fillStyle = "#66fcf1";
+        ctx.font = "bold 80px 'Orbitron'";
+        ctx.textAlign = "center";
+        ctx.fillText(countdownTimer, canvas.width/2, canvas.height/2);
+    }
+    else if (currentState === STATE.SELECT_ACTION) {
+        ctx.fillStyle = activePlayer === 1 ? "#66fcf1" : "#e74c3c";
+        ctx.font = "30px 'Orbitron'";
+        ctx.textAlign = "center";
+        if (!selectedAttacker) ctx.fillText(`ОЙЫНШЫ ${activePlayer}: КЕЙІПКЕР ТАҢДА!`, canvas.width/2, 50);
+        else if (!selectedAbility) drawAbilityMenu();
+        else ctx.fillText(`ОЙЫНШЫ ${activePlayer}: ШАБУЫЛДА!`, canvas.width/2, 50);
+    }
+
+    if (currentState === STATE.ANIMATION && animationData?.type === 'ranged') {
+        ctx.beginPath();
+        ctx.arc(animationData.x, animationData.y, 10, 0, Math.PI*2);
+        ctx.fillStyle = animationData.color;
+        ctx.fill();
+    }
+
+    particles.forEach(p => p.draw(ctx));
+    damageNumbers.forEach(d => d.draw(ctx));
+
+    ctx.restore();
+}
+
+function drawAbilityMenu() {
+    ctx.font = "bold 12px 'Orbitron'";
+    ctx.textAlign = "center";
+    abilityButtons.forEach(btn => {
+        ctx.fillStyle = btn.color;
+        ctx.fillRect(btn.x, btn.y, btn.w, btn.h);
+        ctx.strokeStyle = "white";
+        ctx.strokeRect(btn.x, btn.y, btn.w, btn.h);
+        ctx.fillStyle = "black";
+        ctx.fillText(btn.text, btn.x + btn.w/2, btn.y + 20);
+    });
+}
+
+function endGame(winnerTeam) {
+    currentState = STATE.GAME_OVER;
+    drawBackground();
+    ctx.fillStyle = "rgba(0,0,0,0.85)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const color = winnerTeam === 1 ? "#66fcf1" : "#e74c3c";
+    ctx.fillStyle = color;
+    ctx.font = "bold 60px 'Orbitron'";
+    ctx.textAlign = "center";
+    ctx.fillText(winnerTeam + "-ШІ ОЙЫНШЫ ЖЕҢДІ!", canvas.width/2, canvas.height/2);
+    ctx.font = "24px 'Roboto'";
+    ctx.fillStyle = "white";
+    ctx.fillText("F5 басып қайта ойнаңыз", canvas.width/2, canvas.height/2 + 60);
+}
+
+function showNotification(text, color = "#66fcf1") {
+    notificationDiv.innerText = text;
+    notificationDiv.style.color = color;
+    notificationDiv.style.opacity = 1;
+    setTimeout(() => { notificationDiv.style.opacity = 0; }, 1500);
+}
+
+// --- LOOPS & INPUTS ---
+function gameLoop() {
+    // Unlock timers
+    if (Date.now() > p1LockTimer) p1Locked = false;
+    if (Date.now() > p2LockTimer) p2Locked = false;
+
+    if (currentState === STATE.SELECTION) {
+        drawSelectionPhase();
+        particles.forEach(p => { p.update(); p.draw(ctx); });
+    } else if (currentState !== STATE.GAME_OVER) {
+        updateAnimation();
+        for (let i = particles.length - 1; i >= 0; i--) {
+            particles[i].update();
+            if (particles[i].life <= 0) particles.splice(i, 1);
+        }
+        for (let i = damageNumbers.length - 1; i >= 0; i--) {
+            damageNumbers[i].update();
+            if (damageNumbers[i].life <= 0) damageNumbers.splice(i, 1);
+        }
+        if (screenShake > 0) screenShake *= 0.9;
+        if (screenShake < 0.5) screenShake = 0;
+
+        drawBattle();
+    }
+    requestAnimationFrame(gameLoop);
+}
+
+canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+    const y = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+    if (currentState === STATE.SELECTION) handleSelectionClick(x, y);
+    else if (currentState === STATE.SELECT_ACTION) handleActionClick(x, y);
+});
+
+// KEYBOARD INPUT FOR QUIZ
+document.addEventListener('keydown', (e) => {
+    handleQuizInput(e.code);
+});
+
+initSelectionPhase();
+gameLoop();
+
+</script>
+</body>
+</html>

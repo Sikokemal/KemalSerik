@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Python Жекпе-жегі: Cyber Arena</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@500;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --p1-neon: #3b82f6;
+            --p2-neon: #f43f5e;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #020204;
+            color: #e2e8f0;
+            margin: 0;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .mono { font-family: 'JetBrains Mono', monospace; }
+
+        .grid-bg {
+            background-image: linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
+                              linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 40px 40px;
+            mask-image: radial-gradient(circle at center, black 30%, transparent 90%);
+        }
+
+        @keyframes shake-combat {
+            0%, 100% { transform: translate(0, 0); }
+            10%, 30%, 50%, 70%, 90% { transform: translate(-6px, -2px); }
+            20%, 40%, 60%, 80% { transform: translate(6px, 2px); }
+        }
+
+        .animate-shake { animation: shake-combat 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+
+        .scanline {
+            width: 100%; height: 4px; z-index: 100;
+            background: rgba(255, 255, 255, 0.05);
+            position: absolute; top: 0;
+            pointer-events: none;
+            animation: scan 6s linear infinite;
+        }
+
+        @keyframes scan { to { top: 100%; } }
+
+        .disabled-zone {
+            filter: grayscale(1) brightness(0.3) blur(1px);
+            pointer-events: none;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .hp-bar-fill {
+            transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .floating {
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .lockout-overlay {
+            background: repeating-linear-gradient(45deg, rgba(0,0,0,0.1), rgba(0,0,0,0.1) 10px, rgba(255,255,255,0.02) 10px, rgba(255,255,255,0.02) 20px);
+        }
+        
+        .btn-cyber {
+            clip-path: polygon(10% 0, 100% 0, 100% 70%, 90% 100%, 0 100%, 0 30%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-cyber:hover:not(:disabled) {
+            transform: translateY(-2px);
+            filter: brightness(1.2);
+        }
+
+        .avatar-card {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 2px solid transparent;
+        }
+        .avatar-card.selected {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+
+<div class="fixed inset-0 grid-bg pointer-events-none"></div>
+<div class="scanline"></div>
+<div id="app" class="relative z-10"></div>
+<script src="config.js"></script>
+
+<script>
+    // GitHub сам заменит эту строку на реальный ключ
+const apiKey = "AIzaSyCM8eT2d1r9iEMjvrQmR9JjQCqPywSiPyA";
+    
+    
+    let currentQuestions = [
+        { q: "Python-да айнымалыға мән беру үшін қандай таңба қолданылады?", options: ["=", "==", ":=", "->"], correct: 0 },
+        { q: "Экранға мәлімет шығару функциясы?", options: ["echo()", "console.log()", "print()", "output()"], correct: 2 },
+        { q: "Деректер түрін анықтау?", options: ["type()", "kind()", "class()", "is()"], correct: 0 },
+        { q: "Тізімге элемент қосу әдісі?", options: ["add()", "push()", "append()", "insert_end()"], correct: 2 },
+        { q: "Циклді тоқтату операторы?", options: ["stop", "exit", "break", "end"], correct: 2 },
+        { q: "Сөздік (dictionary) құру үшін қандай жақша қолданылады?", options: ["[]", "()", "{}", "<>"], correct: 2 },
+        { q: "Бүтін санды бөлу операторы?", options: ["/", "%", "//", "div"], correct: 2 },
+        { q: "Қай функция жолдың ұзындығын қайтарады?", options: ["len()", "length()", "size()", "count()"], correct: 0 },
+        { q: "Python-дағы түсініктеме (comment) таңбасы?", options: ["//", "/*", "#", "--"], correct: 2 },
+        { q: " range(0, 10, 2) функциясының қадамы қандай?", options: ["0", "10", "2", "5"], correct: 2 }
+    ];
+
+    const ATTACK_MODES = [
+        { id: 'standard', name: 'ШАБУЫЛ', icon: 'swords', damage: 20, selfDmg: 10, heal: 0, color: 'bg-blue-600', neon: 'shadow-blue-500/40' },
+        { id: 'mega', name: 'ЖОЮ (1 рет)', icon: 'skull', damage: 60, selfDmg: 40, heal: 0, color: 'bg-orange-600', neon: 'shadow-orange-500/40' },
+        { id: 'drain', name: 'СІҢІРУ', icon: 'activity', damage: 15, selfDmg: 5, heal: 20, color: 'bg-emerald-600', neon: 'shadow-emerald-500/40' }
+    ];
+
+    const AVATARS = ['ghost', 'flame', 'zap', 'shield', 'rocket', 'cpu'];
+
+    let state = {
+        gameState: 'menu', // menu, setup, generating, battle, result
+        qIdx: 0,
+        hp: [100, 100],
+        hasAnswered: [false, false],
+        selectedAtk: [ATTACK_MODES[0], ATTACK_MODES[0]],
+        megaUsed: [false, false], // Трекинг использования супер-атаки
+        winner: null,
+        anim: null,
+        topic: "Python негіздері",
+        playerNames: ["Protocol A", "Protocol B"],
+        playerIcons: ["ghost", "flame"]
+    };
+
+    async function generateAIQuestions(topic) {
+        state.gameState = 'generating';
+        render();
+        const systemPrompt = `JSON қайтар: { "questions": [{ "q": "сұрақ", "options": ["нұсқа1", "нұсқа2", "нұсқа3", "нұсқа4"], "correct": 0 }] }. Тақырып: ${topic}. 10 сұрақ, қазақша.`;
+        try {
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: systemPrompt }] }],
+                    generationConfig: { responseMimeType: "application/json" }
+                })
+            });
+            const result = await response.json();
+            const data = JSON.parse(result.candidates[0].content.parts[0].text);
+            currentQuestions = data.questions;
+            state.gameState = 'battle';
+        } catch (error) {
+            state.gameState = 'battle';
+        }
+        render();
+    }
+
+    function render() {
+        const app = document.getElementById('app');
+        
+        if (state.gameState === 'menu') {
+            app.innerHTML = `
+                <div class="min-h-screen flex flex-col items-center justify-center p-4 text-center">
+                    <div class="mb-8 floating relative">
+                        <i data-lucide="zap" class="w-24 h-24 text-blue-500 opacity-80"></i>
+                        <div class="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full"></div>
+                    </div>
+                    <h1 class="text-6xl font-black italic uppercase mb-2 tracking-tighter text-white">
+                        <span class="text-blue-500">SPEED</span> DUEL
+                    </h1>
+                    <p class="text-[11px] text-slate-500 uppercase tracking-[0.5em] mb-12 font-bold">CYBER ARENA v9.0</p>
+                    <button onclick="state.gameState = 'setup'; render();" class="btn-cyber px-20 py-6 bg-blue-600 text-white font-black text-2xl hover:bg-blue-400 transition-all shadow-[0_0_40px_rgba(59,130,246,0.4)]">
+                        БАПТАУДЫ БАСТАУ
+                    </button>
+                </div>
+            `;
+        } else if (state.gameState === 'setup') {
+            app.innerHTML = `
+                <div class="min-h-screen flex flex-col items-center justify-center p-8">
+                    <h2 class="text-3xl font-black italic mb-10 uppercase tracking-tighter">КОМАНДАЛАРДЫ ДАЙЫНДАУ</h2>
+                    
+                    <div class="grid grid-cols-2 gap-12 w-full max-w-5xl">
+                        ${[0, 1].map(p => `
+                            <div class="bg-white/5 border border-white/10 p-8 rounded-[3rem] backdrop-blur-md">
+                                <h3 class="text-xs font-black uppercase tracking-widest text-slate-500 mb-6 text-center">${p+1}-ОЙЫНШЫ</h3>
+                                
+                                <input type="text" placeholder="Команда аты" value="${state.playerNames[p]}"
+                                    onchange="state.playerNames[${p}] = this.value"
+                                    class="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 mb-8 outline-none focus:border-blue-500 transition-all text-center font-bold">
+                                
+                                <div class="grid grid-cols-3 gap-3">
+                                    ${AVATARS.map(icon => `
+                                        <div onclick="state.playerIcons[${p}] = '${icon}'; render();" 
+                                            class="avatar-card p-4 bg-black/40 rounded-2xl flex items-center justify-center cursor-pointer ${state.playerIcons[p] === icon ? 'selected' : 'opacity-40'}">
+                                            <i data-lucide="${icon}" class="w-6 h-6"></i>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <div class="mt-12 w-full max-w-sm">
+                        <input type="text" id="topicInput" value="${state.topic}" 
+                            class="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 mb-6 text-sm font-bold text-center outline-none focus:border-blue-500"
+                            placeholder="Тақырыпты енгізіңіз...">
+                        <button onclick="handleStart()" class="w-full py-6 bg-blue-600 rounded-2xl font-black text-xl hover:bg-blue-400 transition-all">
+                            ШAЙҚАСҚА!
+                        </button>
+                    </div>
+                </div>
+            `;
+        } else if (state.gameState === 'generating') {
+            app.innerHTML = `<div class="min-h-screen flex items-center justify-center font-black uppercase tracking-[0.5em] animate-pulse">Сұрақтар жүктелуде...</div>`;
+        } else if (state.gameState === 'result') {
+            const blueWins = state.winner === 0;
+            app.innerHTML = `
+                <div class="min-h-screen flex flex-col items-center justify-center text-center">
+                    <h1 class="text-8xl font-black mb-8 italic uppercase ${blueWins ? 'text-blue-500' : 'text-rose-500'}">
+                        ${state.playerNames[state.winner]}<br><span class="text-white">ЖЕҢІМПАЗ!</span>
+                    </h1>
+                    <button onclick="location.reload()" class="px-12 py-4 bg-white text-black font-black rounded-full hover:invert transition-all">ҚАЙТАЛАУ</button>
+                </div>
+            `;
+        } else {
+            const q = currentQuestions[state.qIdx];
+            app.innerHTML = `
+                <div class="min-h-screen flex flex-col ${state.anim ? 'animate-shake' : ''}">
+                    <!-- HUD -->
+                    <div class="grid grid-cols-2 h-24 border-b border-white/5 bg-black/80 backdrop-blur-xl">
+                        ${[0, 1].map(p => `
+                            <div class="flex items-center px-10 gap-6 ${p === 1 ? 'flex-row-reverse text-right' : ''}">
+                                <div class="w-14 h-14 rounded-2xl ${p === 0 ? 'bg-blue-600 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'bg-rose-600 shadow-[0_0_20px_rgba(244,63,94,0.3)]'} flex items-center justify-center">
+                                    <i data-lucide="${state.playerIcons[p]}" class="w-7 h-7 text-white"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-end mb-2">
+                                        <span class="text-[10px] font-black uppercase text-slate-500">${state.playerNames[p]}</span>
+                                        <span class="text-sm font-black mono text-white">${state.hp[p]}%</span>
+                                    </div>
+                                    <div class="h-2.5 bg-slate-900 rounded-full overflow-hidden p-[2px]">
+                                        <div class="hp-bar-fill h-full rounded-full ${p === 0 ? 'bg-blue-500' : 'bg-rose-500'}" style="width: ${state.hp[p]}%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <!-- Arena Center -->
+                    <div class="flex-1 flex flex-col items-center justify-center p-8 relative">
+                        <div class="max-w-3xl w-full text-center py-16 px-12 bg-white/5 border border-white/10 rounded-[3rem] backdrop-blur-xl shadow-2xl relative">
+                            <div class="absolute -top-4 left-1/2 -translate-x-1/2 bg-blue-600 text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.3em]">Stage ${state.qIdx + 1} / ${currentQuestions.length}</div>
+                            <h2 class="text-2xl md:text-3xl font-black leading-tight mb-4 text-white italic uppercase">${q.q}</h2>
+                        </div>
+                        
+                        ${state.anim ? `
+                            <div class="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+                                <div class="bg-black/90 backdrop-blur-lg text-4xl font-black px-12 py-6 rounded-3xl border-2 ${state.anim.type === 'hit' ? 'border-emerald-500 text-emerald-400' : 'border-rose-500 text-rose-400'} animate-bounce shadow-2xl">
+                                    ${state.anim.text}
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Players Controls -->
+                    <div class="grid grid-cols-2 h-[40vh] border-t border-white/10 bg-black/40">
+                        ${[0, 1].map(pIdx => `
+                            <div class="flex flex-col p-8 gap-6 relative ${pIdx === 0 ? 'bg-blue-500/5' : 'bg-rose-500/5'} ${state.hasAnswered[pIdx] ? 'disabled-zone' : ''}">
+                                <div class="flex gap-3 mb-2">
+                                    ${ATTACK_MODES.map(mode => {
+                                        const isUsedMega = mode.id === 'mega' && state.megaUsed[pIdx];
+                                        return `
+                                            <button onclick="changeAttack(${pIdx}, '${mode.id}')" 
+                                                ${isUsedMega ? 'disabled' : ''}
+                                                class="flex-1 py-3 rounded-xl border-2 text-[9px] font-black uppercase tracking-widest transition-all ${state.selectedAtk[pIdx].id === mode.id ? `border-white ${mode.color} ${mode.neon} scale-105` : 'border-white/5 bg-slate-900/50 text-slate-500'} ${isUsedMega ? 'opacity-20 grayscale' : ''}">
+                                                ${mode.name}
+                                            </button>
+                                        `;
+                                    }).join('')}
+                                </div>
+                                
+                                <div class="grid grid-cols-2 gap-4 flex-1">
+                                    ${q.options.map((opt, optI) => `
+                                        <button onclick="handleAnswer(${pIdx}, ${optI})" 
+                                            class="btn-cyber p-4 rounded-2xl border-2 border-white/10 bg-slate-900/80 text-[12px] font-black hover:bg-white hover:text-black uppercase">
+                                            ${opt}
+                                        </button>
+                                    `).join('')}
+                                </div>
+
+                                ${state.hasAnswered[pIdx] ? `
+                                    <div class="absolute inset-0 flex flex-col items-center justify-center lockout-overlay z-10">
+                                        <div class="p-4 bg-black/80 border border-white/10 rounded-2xl backdrop-blur-md">
+                                            <span class="text-[10px] font-black uppercase text-rose-500 animate-pulse tracking-widest">БҰҒАТТАЛДЫ</span>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        lucide.createIcons();
+    }
+
+    function handleStart() {
+        state.topic = document.getElementById('topicInput').value || "Python негіздері";
+        if (apiKey) generateAIQuestions(state.topic);
+        else {
+            state.gameState = 'battle';
+            render();
+        }
+    }
+
+    function changeAttack(pIdx, modeId) {
+        if (modeId === 'mega' && state.megaUsed[pIdx]) return;
+        state.selectedAtk[pIdx] = ATTACK_MODES.find(m => m.id === modeId);
+        render();
+    }
+
+    function handleAnswer(pIdx, optIdx) {
+        if (state.anim || state.hasAnswered[pIdx]) return;
+
+        const isCorrect = optIdx === currentQuestions[state.qIdx].correct;
+        const opponentIdx = pIdx === 0 ? 1 : 0;
+        const mode = state.selectedAtk[pIdx];
+
+        if (isCorrect) {
+            // Если использована супер-атака, помечаем
+            if (mode.id === 'mega') state.megaUsed[pIdx] = true;
+
+            state.hp[opponentIdx] = Math.max(0, state.hp[opponentIdx] - mode.damage);
+            if (mode.heal > 0) state.hp[pIdx] = Math.min(100, state.hp[pIdx] + mode.heal);
+            
+            state.anim = { type: 'hit', text: `ДҰРЫС: -${mode.damage}HP` };
+            render();
+
+            setTimeout(() => {
+                state.anim = null;
+                // Сбрасываем режим атаки на стандартный после Mega, если он был использован
+                if (mode.id === 'mega') state.selectedAtk[pIdx] = ATTACK_MODES[0];
+                
+                if (state.hp[opponentIdx] <= 0) {
+                    state.winner = pIdx;
+                    state.gameState = 'result';
+                } else {
+                    moveToNextQuestion();
+                }
+                render();
+            }, 1200);
+        } else {
+            state.hp[pIdx] = Math.max(0, state.hp[pIdx] - mode.selfDmg);
+            state.hasAnswered[pIdx] = true;
+            state.anim = { type: 'miss', text: `ҚАТЕ: -${mode.selfDmg}` };
+            render();
+
+            setTimeout(() => {
+                state.anim = null;
+                if (state.hp[pIdx] <= 0) {
+                    state.winner = opponentIdx;
+                    state.gameState = 'result';
+                } else if (state.hasAnswered[0] && state.hasAnswered[1]) {
+                    moveToNextQuestion();
+                }
+                render();
+            }, 1200);
+        }
+    }
+
+    function moveToNextQuestion() {
+        if (state.qIdx < currentQuestions.length - 1) {
+            state.qIdx++;
+            state.hasAnswered = [false, false];
+        } else {
+            state.winner = state.hp[0] > state.hp[1] ? 0 : 1;
+            state.gameState = 'result';
+        }
+    }
+
+    render();
+</script>
+</body>
+</html>
+

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Terraria Clone - Skin Loader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { margin: 0; overflow: hidden; background: #87CEEB; font-family: sans-serif; }
+        canvas { display: block; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; text-shadow: 2px 2px 2px rgba(0,0,0,0.5); pointer-events: none; }
+        .panel { position: absolute; background: rgba(0,0,0,0.7); padding: 15px; border-radius: 8px; color: white; pointer-events: all; }
+        #inventory { top: 10px; right: 10px; display: flex; gap: 5px; }
+        #settings { bottom: 20px; right: 20px; width: 220px; font-size: 12px; }
+        .slot { width: 44px; height: 44px; background: rgba(0,0,0,0.6); border: 2px solid #555; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .slot.active { border-color: #fff; background: rgba(100,100,255,0.4); }
+        .input-group { margin-bottom: 8px; }
+        input[type="number"] { width: 50px; color: black; padding: 2px; border-radius: 4px; }
+        button { background: #4a5568; padding: 5px 10px; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+        button:hover { background: #2d3748; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <h1 class="text-xl font-bold">Terraria 2D</h1>
+    <p>Блоки: <span id="block-count">0</span></p>
+    <button onclick="document.getElementById('fileInput').click()" class="mt-2 pointer-events-auto bg-blue-600">Загрузить скин (.png/.jpg)</button>
+    <input type="file" id="fileInput" hidden accept="image/*">
+</div>
+
+<div id="inventory" class="panel">
+    <div class="slot active" onclick="selectSlot(0)">⛏️</div>
+    <div class="slot" onclick="selectSlot(1)"><div style="width:20px;height:20px;background:#8B4513;"></div></div>
+    <div class="slot" onclick="selectSlot(2)"><div style="width:20px;height:20px;background:#808080;"></div></div>
+</div>
+
+<div id="settings" class="panel">
+    <h3 class="font-bold mb-2">Настройка спрайта</h3>
+    <div class="input-group flex justify-between">
+        <span>Ширина кадра:</span>
+        <input type="number" id="sw" value="64" onchange="updateSpriteSettings()">
+    </div>
+    <div class="input-group flex justify-between">
+        <span>Высота кадра:</span>
+        <input type="number" id="sh" value="64" onchange="updateSpriteSettings()">
+    </div>
+    <div class="input-group flex justify-between">
+        <span>Всего кадров:</span>
+        <input type="number" id="sf" value="4" onchange="updateSpriteSettings()">
+    </div>
+    <p class="text-gray-400 mt-2 italic">Настройте числа, чтобы анимация попадала в сетку вашего файла.</p>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const fileInput = document.getElementById('fileInput');
+
+    // Спрайт
+    let spriteImg = new Image();
+    let spriteLoaded = false;
+    let SPRITE_W = 64;
+    let SPRITE_H = 64;
+    let TOTAL_FRAMES = 4;
+
+    function updateSpriteSettings() {
+        SPRITE_W = parseInt(document.getElementById('sw').value);
+        SPRITE_H = parseInt(document.getElementById('sh').value);
+        TOTAL_FRAMES = parseInt(document.getElementById('sf').value);
+    }
+
+    fileInput.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                spriteImg.src = event.target.result;
+                spriteImg.onload = () => { spriteLoaded = true; };
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // Параметры мира
+    const TILE_SIZE = 32;
+    const GRAVITY = 0.5;
+    const JUMP_FORCE = -11;
+    const SPEED = 4.5;
+    
+    let width, height;
+    let camera = { x: 0, y: 0 };
+    let world = [];
+    let worldWidth = 150;
+    let worldHeight = 50;
+    let selectedSlot = 0;
+    let inventory = { dirt: 0, stone: 0 };
+
+    const player = {
+        x: 75 * TILE_SIZE,
+        y: 10 * TILE_SIZE,
+        vx: 0,
+        vy: 0,
+        width: 28,
+        height: 52,
+        grounded: false,
+        dir: 1,
+        anim: 0,
+        moving: false,
+        mining: false,
+        mineAngle: 0
+    };
+
+    const keys = {};
+
+    function initWorld() {
+        for (let x = 0; x < worldWidth; x++) {
+            world[x] = [];
+            let ground = Math.floor(20 + Math.sin(x * 0.1) * 4);
+            for (let y = 0; y < worldHeight; y++) {
+                let t = 0;
+                if (y === ground) t = 1; // трава
+                else if (y > ground && y < ground + 6) t = 2; // земля
+                else if (y >= ground + 6) t = 3; // камень
+                world[x][y] = t;
+            }
+        }
+    }
+
+    function selectSlot(i) {
+        selectedSlot = i;
+        document.querySelectorAll('.slot').forEach((s, idx) => s.classList.toggle('active', idx === i));
+    }
+
+    window.onresize = () => { width = canvas.width = window.innerWidth; height = canvas.height = window.innerHeight; };
+    window.onkeydown = e => keys[e.code] = true;
+    window.onkeyup = e => keys[e.code] = false;
+
+    canvas.onmousedown = (e) => {
+        const mx = e.clientX + camera.x;
+        const my = e.clientY + camera.y;
+        const tx = Math.floor(mx / TILE_SIZE);
+        const ty = Math.floor(my / TILE_SIZE);
+        
+        const d = Math.hypot(player.x + 14 - mx, player.y + 26 - my);
+        if (d > TILE_SIZE * 5) return;
+
+        if (selectedSlot === 0) {
+            if (world[tx]?.[ty] > 0) {
+                if (world[tx][ty] === 3) inventory.stone++; else inventory.dirt++;
+                world[tx][ty] = 0;
+                player.mining = true;
+                document.getElementById('block-count').innerText = inventory.dirt + inventory.stone;
+            }
+        } else {
+            if (world[tx]?.[ty] === 0) {
+                if (selectedSlot === 1 && inventory.dirt > 0) { world[tx][ty] = 2; inventory.dirt--; }
+                else if (selectedSlot === 2 && inventory.stone > 0) { world[tx][ty] = 3; inventory.stone--; }
+                document.getElementById('block-count').innerText = inventory.dirt + inventory.stone;
+            }
+        }
+    };
+
+    function update() {
+        player.moving = false;
+        if (keys['KeyA'] || keys['ArrowLeft']) { player.vx = -SPEED; player.dir = -1; player.moving = true; }
+        else if (keys['KeyD'] || keys['ArrowRight']) { player.vx = SPEED; player.dir = 1; player.moving = true; }
+        else player.vx *= 0.8;
+
+        if ((keys['KeyW'] || keys['ArrowUp'] || keys['Space']) && player.grounded) { player.vy = JUMP_FORCE; player.grounded = false; }
+
+        player.vy += GRAVITY;
+        
+        // Коллизии
+        if (!collide(player.x + player.vx, player.y)) player.x += player.vx; else player.vx = 0;
+        if (!collide(player.x, player.y + player.vy)) {
+            player.y += player.vy;
+            player.grounded = false;
+        } else {
+            if (player.vy > 0) player.grounded = true;
+            player.vy = 0;
+        }
+
+        camera.x += (player.x - width/2 - camera.x) * 0.1;
+        camera.y += (player.y - height/2 - camera.y) * 0.1;
+
+        if (player.moving) player.anim += 0.15; else player.anim = 0;
+        if (player.mining) { player.mineAngle += 0.4; if (player.mineAngle > 5) { player.mineAngle = 0; player.mining = false; } }
+    }
+
+    function collide(px, py) {
+        for (let i = Math.floor(px/TILE_SIZE); i <= Math.floor((px+player.width)/TILE_SIZE); i++) {
+            for (let j = Math.floor(py/TILE_SIZE); j <= Math.floor((py+player.height)/TILE_SIZE); j++) {
+                if (world[i]?.[j] > 0) return true;
+            }
+        }
+        return false;
+    }
+
+    function draw() {
+        ctx.clearRect(0,0,width,height);
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y);
+
+        // Мир
+        const x1 = Math.floor(camera.x / TILE_SIZE), x2 = x1 + Math.ceil(width/TILE_SIZE) + 1;
+        const y1 = Math.floor(camera.y / TILE_SIZE), y2 = y1 + Math.ceil(height/TILE_SIZE) + 1;
+
+        for (let x = x1; x < x2; x++) {
+            for (let y = y1; y < y2; y++) {
+                const t = world[x]?.[y];
+                if (!t) continue;
+                ctx.fillStyle = t === 1 ? '#4CAF50' : (t === 2 ? '#8B4513' : '#808080');
+                ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+        }
+
+        // Игрок
+        ctx.save();
+        ctx.translate(player.x + 14, player.y + 26);
+        if (player.dir === -1) ctx.scale(-1, 1);
+
+        if (spriteLoaded) {
+            const frame = Math.floor(player.anim) % TOTAL_FRAMES;
+            ctx.drawImage(spriteImg, frame * SPRITE_W, 0, SPRITE_W, SPRITE_H, -25, -30, 50, 60);
+        } else {
+            ctx.fillStyle = 'red'; ctx.fillRect(-14,-26,28,52);
+        }
+
+        if (player.mining) {
+            ctx.save(); ctx.rotate(player.mineAngle);
+            ctx.fillStyle = 'silver'; ctx.fillRect(0,-2,25,4); ctx.restore();
+        }
+        ctx.restore();
+
+        ctx.restore();
+        requestAnimationFrame(loop);
+    }
+
+    function loop() { update(); draw(); }
+
+    window.onload = () => { window.onresize(); initWorld(); loop(); };
+</script>
+</body>
+</html>
