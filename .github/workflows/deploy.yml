@@ -1,0 +1,18 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: ["main"]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inject API Key
+        run: |
+          sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" index.html
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        uses: sailscast/github-pages-deploy-action@v1.2.0
