@@ -11,6 +11,11 @@ permissions:
 
 jobs:
   build-and-deploy:
+    # Pages-ке деплой жасау үшін осы ортаны көрсету міндетті
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -18,7 +23,7 @@ jobs:
 
       - name: Inject API Key
         run: |
-          sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" index.html
+          sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" codebatle.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
