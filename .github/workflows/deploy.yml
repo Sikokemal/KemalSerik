@@ -1,18 +1,34 @@
 name: Deploy to GitHub Pages
+
 on:
   push:
-    branches: ["main"]
+    branches: ["main"] # Егер тармағың 'master' болса, осы жерді өзгерт
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Inject API Key
         run: |
+          # index.html ішіндегі REPLACE_ME_WITH_API_KEY мәтінін Secret-тегі кілтпен ауыстырады
           sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" index.html
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: '.' # Барлық файлдарды жүктейді
+
       - name: Deploy to GitHub Pages
-        uses: sailscast/github-pages-deploy-action@v1.2.0
+        id: deployment
+        uses: actions/deploy-pages@v4
