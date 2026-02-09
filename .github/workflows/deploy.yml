@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   build-and-deploy:
-    # Pages-ке деплой жасау үшін осы ортаны көрсету міндетті
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -21,10 +20,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Inject API Key
+      - name: Inject API Key and Verify
         run: |
+          # Файлдардың бар-жоғын тексеру
+          echo "Checking files..."
+          ls -l
+          
+          if [ ! -f "codebatle.html" ]; then echo "Error: codebatle.html not found"; exit 1; fi
+          if [ ! -f "TaskAi.html" ]; then echo "Error: TaskAi.html not found"; exit 1; fi
+
+          # Кілтті енгізу
+          echo "Injecting API Key..."
           sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" codebatle.html
           sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" TaskAi.html
+
+          # Енгізу сәтті болғанын тексеру (маркер қалмауы керек)
+          if grep -q "REPLACE_ME_WITH_API_KEY" TaskAi.html; then
+            echo "Error: API Key NOT injected into TaskAi.html. Placeholder still exists."
+            exit 1
+          fi
+          echo "Success: API Key injected into files."
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
