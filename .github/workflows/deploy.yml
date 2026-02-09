@@ -24,6 +24,7 @@ jobs:
       - name: Inject API Key
         run: |
           sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" codebatle.html
+          sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" TaskAi.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
