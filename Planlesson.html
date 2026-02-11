@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Кәсіби сабақ жоспарының редакторы</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @font-face {
+            font-family: 'Times New Roman';
+            src: local('Times New Roman');
+        }
+        body { 
+            font-family: 'Times New Roman', Times, serif; 
+            background-color: #f3f4f6; 
+        }
+        
+        .doc-container {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm 15mm 20mm 30mm;
+            margin: 20px auto;
+            background: white;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            color: black;
+            font-size: 12pt;
+            line-height: 1.15;
+        }
+
+        .header-college {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+        }
+
+        .approval-block {
+            float: right;
+            text-align: right;
+            width: 50%;
+            margin-bottom: 15px;
+        }
+
+        .main-title {
+            text-align: center;
+            font-weight: bold;
+            font-size: 13pt;
+            margin: 15px 0;
+            text-decoration: underline;
+            clear: both;
+        }
+
+        .line-item {
+            margin-bottom: 4px;
+            text-align: left;
+        }
+
+        .section-title {
+            font-weight: bold;
+            margin-top: 12px;
+            margin-bottom: 4px;
+            display: block;
+        }
+
+        .content-body p {
+            text-indent: 1.25cm;
+            margin: 0;
+            padding: 0;
+            text-align: justify;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        table, th, td {
+            border: 1px solid black;
+        }
+
+        th, td {
+            padding: 6px 10px;
+            text-align: left;
+            font-size: 11pt;
+        }
+
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        @media print {
+            .no-print { display: none; }
+            body { background: white; margin: 0; }
+            .doc-container { 
+                box-shadow: none; 
+                margin: 0; 
+                width: 100%; 
+                padding: 10mm 10mm 10mm 20mm; 
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+
+    <!-- Интерфейс -->
+    <div class="max-w-4xl mx-auto bg-white p-6 mt-6 no-print shadow-lg rounded-lg border border-gray-200">
+        <div class="flex items-center justify-between mb-6 border-b pb-4">
+            <h2 class="text-2xl font-bold text-gray-800">Сабақ жоспары AI</h2>
+            <div class="text-xs text-gray-400 font-mono">v2.5 Flash</div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Сабақтың тақырыбы</label>
+                <input type="text" id="topic" class="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" value="Дизайн жүйелері және компоненттер кітапханасы">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Модуль / Пән</label>
+                <input type="text" id="module" class="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" value="КМ 07 Мобильді қосымшаларды әзірлеу">
+            </div>
+            <div class="flex gap-2">
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Курс</label>
+                    <input type="text" id="course" class="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" value="3 курс">
+                </div>
+                <div class="flex-1">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Топ</label>
+                    <input type="text" id="group" class="w-full border border-gray-300 p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none" value="301 РПО">
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap gap-3">
+            <button id="generateBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded font-bold transition flex items-center gap-2">
+                <span id="btnText">Жоспарды құрастыру</span>
+            </button>
+            <button onclick="window.print()" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-2.5 rounded font-semibold transition">
+                Печать / PDF
+            </button>
+            <button onclick="exportToWord()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2.5 rounded font-bold transition">
+                Word (DOC) жүктеу
+            </button>
+        </div>
+    </div>
+
+    <!-- Баспа аймағы (A4) -->
+    <div id="printArea" class="doc-container">
+        <div class="header-college">«АҚТӨБЕ ҚҰРЫЛЫС-ТЕХНИКАЛЫҚ КОЛЛЕДЖІ» МКҚК</div>
+        <div class="header-college">ОҚУ САБАҒЫНЫҢ ЖОСПАРЫ</div>
+        
+        <div class="approval-block">
+            «БЕКІТЕМІН»<br>
+            «Бағдарламалық қамтамасыз ету»<br>
+            ЦӘБ төрайымы<br>
+            __________ Г. Ж. Иржанова
+        </div>
+        
+        <div style="clear: both;"></div>
+
+        <div class="line-item"><b>Сабақтың тақырыбы:</b> <span id="outTopic">...</span></div>
+        <div class="line-item"><b>Модуль /пән атауы:</b> <span id="outModule">...</span></div>
+        <div class="line-item"><b>Дайындаған оқытушы:</b> Кемал С. Қ.</div>
+        <div class="line-item"><b>Курс, топ:</b> <span id="outCourseGroup">...</span></div>
+        <div class="line-item"><b>Сабақтың түрі:</b> Аралас сабақ</div>
+        
+        <div class="section-title">1. Сабақтың мақсаты:</div>
+        <div id="outGoal" class="content-body">...</div>
+        
+        <div class="section-title">2. Сабақтың міндеттері:</div>
+        <div id="outTasks" class="content-body">...</div>
+
+        <div class="section-title">3. Күтілетін нәтижелер:</div>
+        <div id="outResults" class="content-body">...</div>
+
+        <div class="main-title">Сабақтың барысы</div>
+
+        <div class="section-title">І. Ұйымдастыру кезеңі (5 мин):</div>
+        <div class="content-body">
+            <p>Студенттермен амандасу, түгендеу. Аудиторияның тазалығына және студенттердің сабаққа дайындығына назар аудару. Сабақтың тақырыбы мен мақсатын хабарлау.</p>
+        </div>
+
+        <div class="section-title">ІІ. Өткен тақырыпты қайталау (10 мин):</div>
+        <div id="outBrainstorm" class="content-body">...</div>
+
+        <div class="section-title">ІІІ. Жаңа материалды түсіндіру (30 мин):</div>
+        <div id="outTheory" class="content-body">...</div>
+
+        <div class="section-title">Салыстырмалы кесте:</div>
+        <table id="outTable">
+            <thead>
+                <tr>
+                    <th style="width: 30%">Компонент</th>
+                    <th style="width: 40%">Сипаттамасы</th>
+                    <th style="width: 30%">Маңызы</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="section-title">ІV. Практикалық жұмыс (30 мин):</div>
+        <div id="outPractical" class="content-body">...</div>
+
+        <div class="section-title">V. Қорытындылау және бағалау (10 мин):</div>
+        <div id="outConclusion" class="content-body">...</div>
+
+        <div class="section-title">VІ. Рефлексия (5 мин):</div>
+        <div id="outReflection" class="content-body">...</div>
+
+        <div class="section-title">VІІ. Үй тапсырмасы:</div>
+        <div id="outHomework" class="content-body">...</div>
+
+        <div class="section-title" style="margin-top: 20px;">Пайдаланылған әдебиеттер мен ресурстар:</div>
+        <div class="content-body">
+            <p>1. Мобильді қосымшаларды әзірлеу бойынша әдістемелік нұсқаулықтар;</p>
+            <p>2. Figma / Adobe XD онлайн құжаттамалары;</p>
+            <p>3. Интернет ресурстары (Material Design, Human Interface Guidelines).</p>
+        </div>
+    </div>
+
+    <script>
+
+        const apiKey = "REPLACE_ME_WITH_API_KEY";
+        function renderText(id, text) {
+            const el = document.getElementById(id);
+            el.innerHTML = '';
+            if (!text) return;
+            text.split('\n').forEach(line => {
+                if (line.trim()) {
+                    const p = document.createElement('p');
+                    p.innerText = line.trim();
+                    el.appendChild(p);
+                }
+            });
+        }
+
+        async function generatePlan() {
+            const topic = document.getElementById('topic').value;
+            const course = document.getElementById('course').value;
+            const group = document.getElementById('group').value;
+            const btn = document.getElementById('generateBtn');
+            const btnText = document.getElementById('btnText');
+
+            btn.disabled = true;
+            btnText.innerHTML = '<span class="loader"></span> Дайындалуда...';
+
+            const systemPrompt = `Сен Ақтөбе құрылыс-техникалық колледжінің тәжірибелі ІТ оқытушысысың. 
+            Берілген тақырып бойынша сабақ жоспарын қазақ тілінде құрастыр. 
+            
+            ҚАҒИДАЛАР:
+            1. Теория бөлімінде (theory) тек мәтін болсын, тізімдерді (1, 2) қолданба.
+            2. Сұрақтар мен міндеттерде нөмірленген тізімді қолдан.
+            3. tableRows бөліміне 3-4 маңызды техникалық термин немесе элемент қос.
+            
+            Жауапты қатаң түрде мына JSON форматында бер:
+            {
+                "goal": "сабақтың негізгі мақсаты",
+                "tasks": "1. ...\\n2. ...",
+                "results": "студенттер не үйренеді",
+                "brainstorm": "өткенді қайталауға арналған 3-5 сұрақ",
+                "theory": "жаңа тақырыптың негізгі мазмұны",
+                "practical": "практикалық тапсырманың мазмұны",
+                "tableRows": [{"c": "компонент", "d": "сипаттама", "m": "маңызы"}],
+                "conclusion": "сабақты қорытындылау",
+                "reflection": "кері байланыс әдісі",
+                "homework": "үй тапсырмасы"
+            }`;
+
+            try {
+                let currentDelay = 1000;
+                let response;
+                
+                for (let i = 0; i < 5; i++) {
+                    try {
+                        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: `Тақырыбы: ${topic}. ${course}, ${group}.` }] }],
+                                systemInstruction: { parts: [{ text: systemPrompt }] },
+                                generationConfig: { responseMimeType: "application/json" }
+                            })
+                        });
+                        
+                        if (res.ok) {
+                            response = await res.json();
+                            break;
+                        }
+                        
+                        if (res.status === 429) {
+                            await new Promise(r => setTimeout(r, currentDelay));
+                            currentDelay *= 2;
+                        } else {
+                            throw new Error(`API Error: ${res.status}`);
+                        }
+                    } catch (err) {
+                        if (i === 4) throw err;
+                    }
+                }
+
+                const data = JSON.parse(response.candidates[0].content.parts[0].text);
+
+                document.getElementById('outTopic').innerText = topic;
+                document.getElementById('outModule').innerText = document.getElementById('module').value;
+                document.getElementById('outCourseGroup').innerText = `${course}, ${group}`;
+
+                renderText('outGoal', data.goal);
+                renderText('outTasks', data.tasks);
+                renderText('outResults', data.results);
+                renderText('outBrainstorm', data.brainstorm);
+                renderText('outTheory', data.theory);
+                renderText('outPractical', data.practical);
+                renderText('outConclusion', data.conclusion);
+                renderText('outReflection', data.reflection);
+                renderText('outHomework', data.homework);
+
+                const tbody = document.querySelector('#outTable tbody');
+                tbody.innerHTML = '';
+                data.tableRows.forEach(row => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${row.c}</td><td>${row.d}</td><td>${row.m}</td>`;
+                    tbody.appendChild(tr);
+                });
+
+                document.getElementById('printArea').scrollIntoView({ behavior: 'smooth' });
+
+            } catch (error) {
+                console.error("API Error:", error);
+            } finally {
+                btn.disabled = false;
+                btnText.innerText = 'Жоспарды құрастыру';
+            }
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', generatePlan);
+
+        // Word-қа экспорттау (Жаңартылған функция)
+        function exportToWord() {
+
+            const filename =
+                (document.getElementById('topic').value || "Sabak") + ".doc";
+
+            const header =
+                "<html xmlns:o='urn:schemas-microsoft-com:office:office' " +
+                "xmlns:w='urn:schemas-microsoft-com:office:word'>" +
+                "<head><meta charset='utf-8'>" +
+                "<style>" +
+                "@page { size: 21cm 29.7cm; margin: 2cm 1.5cm 2cm 3cm; }" +
+                "body { font-family:'Times New Roman', serif; font-size:14pt; line-height:1.15; }" +
+                "p { text-indent:35.4pt; text-align:justify; margin:0; }" +
+                "table { border-collapse:collapse; width:100%; margin: 10pt 0; }" +
+                "table, td, th { border:1px solid black; padding: 5pt; font-size: 11pt; }" +
+                ".header-college { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 2pt; }" +
+                ".approval-block { float: right; text-align: right; width: 50%; margin-bottom: 15pt; font-size: 12pt; }" +
+                ".main-title { text-align: center; font-weight: bold; font-size: 16pt; text-decoration: underline; margin: 15pt 0; clear: both; }" +
+                ".section-title { font-weight: bold; margin-top: 12pt; margin-bottom: 4pt; }" +
+                ".line-item { margin-bottom: 4pt; text-indent: 0; }" +
+                "<\/style>" +
+                "<\/head><body>";
+
+            const footer = "<\/body><\/html>";
+
+            const content =
+                document.getElementById("printArea").innerHTML;
+
+            const blob = new Blob(
+                ['\ufeff', header + content + footer],
+                { type: 'application/msword' }
+            );
+
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        }
+    </script>
+</body>
+</html>

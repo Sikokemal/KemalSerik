@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Дәріс Редакторы</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PDF үшін қажетті кітапхана -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @font-face {
+            font-family: 'Times New Roman';
+            src: local('Times New Roman');
+        }
+
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+        }
+
+        .times-font {
+            font-family: 'Times New Roman', Times, serif;
+        }
+
+        .editor-workspace {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 0;
+            gap: 20px;
+        }
+
+        /* А4 форматындағы редактор стилі */
+        #editor {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 20mm 15mm 20mm 30mm; /* Солдан 3см, оңнан 1.5см */
+            background: white;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            font-size: 14pt;
+            line-height: 1.0; /* Одинарный интервал */
+            text-align: justify;
+            color: black;
+            outline: none;
+            overflow-wrap: break-word;
+            box-sizing: border-box;
+        }
+
+        /* Академиялық форматтау (Интервалсыз) */
+        #editor h1 { font-size: 16pt; font-weight: bold; text-align: center; text-transform: uppercase; margin-bottom: 12pt; margin-top: 0; text-indent: 0 !important; line-height: 1.0; }
+        #editor h2 { font-size: 14pt; font-weight: bold; margin-top: 10pt; margin-bottom: 2pt; text-align: left; text-indent: 1.25cm; line-height: 1.0; }
+        #editor p { text-indent: 1.25cm; margin: 0; padding: 0; text-align: justify; line-height: 1.0; }
+
+        .toolbar-btn {
+            @apply p-2 hover:bg-gray-100 rounded transition-all text-gray-700 font-bold min-w-[35px] flex items-center justify-center;
+        }
+
+        @media (max-width: 220mm) {
+            #editor { width: 95%; padding: 15mm; min-height: auto; font-size: 12pt; }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- Басқару панелі -->
+    <div class="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 py-4">
+            <div class="flex flex-col lg:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3 w-full lg:w-auto">
+                    <input type="text" id="topicInput" placeholder="Дәріс тақырыбын енгізіңіз..." 
+                        class="flex-1 lg:w-96 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    <button id="generateBtn" onclick="generateLecture()" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition shadow-lg flex items-center gap-2">
+                        <span id="btnText">Генерациялау</span>
+                        <div id="loader" class="hidden w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    </button>
+                </div>
+                
+                <div id="exportPanel" class="hidden flex items-center gap-2">
+                    <button onclick="exportToWord()" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg flex items-center gap-2 font-semibold shadow active:scale-95 transition-all">
+                        Word (.doc)
+                    </button>
+                    <button onclick="exportToPDF()" class="bg-red-600 hover:bg-red-700 text-white px-5 py-2 rounded-lg flex items-center gap-2 font-semibold shadow active:scale-95 transition-all">
+                        PDF жүктеу
+                    </button>
+                </div>
+            </div>
+
+            <!-- Инструменттер -->
+            <div id="toolbar" class="mt-4 flex flex-wrap items-center gap-2 border-t pt-3 border-gray-100 hidden">
+                <button class="toolbar-btn" onclick="execCmd('bold')">B</button>
+                <button class="toolbar-btn italic font-serif" onclick="execCmd('italic')">I</button>
+                <button class="toolbar-btn underline" onclick="execCmd('underline')">U</button>
+                <div class="h-6 w-[1px] bg-gray-300 mx-1"></div>
+                <button class="toolbar-btn" onclick="execCmd('justifyLeft')">←</button>
+                <button class="toolbar-btn" onclick="execCmd('justifyCenter')">↔</button>
+                <button class="toolbar-btn" onclick="execCmd('justifyFull')">≡</button>
+                <div class="h-6 w-[1px] bg-gray-300 mx-1"></div>
+                <button class="toolbar-btn" onclick="execCmd('undo')">↺</button>
+                <button class="toolbar-btn" onclick="execCmd('redo')">↻</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Редактор -->
+    <main class="editor-workspace">
+        <div id="welcome" class="max-w-md mx-auto text-center mt-20">
+            <div class="bg-white p-12 rounded-3xl shadow-xl border border-gray-100">
+                <div class="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800 mb-2 text-center">Дәріс Редакторы</h2>
+                <p class="text-gray-500">Тақырыпты енгізіп, ЖИ арқылы дәріс жасаңыз.</p>
+            </div>
+        </div>
+
+        <div id="editorContainer" class="hidden">
+            <div id="editor" contenteditable="true" class="times-font shadow-lg"></div>
+        </div>
+    </main>
+
+    <div id="status" class="fixed bottom-8 right-8 px-6 py-3 rounded-2xl shadow-2xl bg-gray-900 text-white transform translate-y-32 transition-all duration-300 z-[100] font-medium"></div>
+
+    <script>
+        const apiKey = "REPLACE_ME_WITH_API_KEY";        
+        const editor = document.getElementById('editor');
+        const status = document.getElementById('status');
+        const loader = document.getElementById('loader');
+        const btnText = document.getElementById('btnText');
+
+        function notify(msg) {
+            status.textContent = msg;
+            status.classList.remove('translate-y-32');
+            setTimeout(() => status.classList.add('translate-y-32'), 3000);
+        }
+
+        function execCmd(command, value = null) {
+            document.execCommand(command, false, value);
+            editor.focus();
+        }
+
+        async function generateLecture() {
+            const topic = document.getElementById('topicInput').value.trim();
+            if (!topic) return notify("Тақырыпты жазыңыз!");
+
+            loader.classList.remove('hidden');
+            btnText.textContent = "Дайындалуда...";
+            document.getElementById('welcome').classList.add('hidden');
+            document.getElementById('editorContainer').classList.add('hidden');
+
+            const systemPrompt = `Сен университет профессорысың. Қазақ тілінде тереңдетілген академиялық дәріс жаз. 
+            Қатаң талаптар:
+            1. Ешқандай маркдаун (#, *, _) қолданба. Тек таза мәтін.
+            2. "Негізгі бөлім", "Основная часть" немесе "Мазмұны" деген сөздерді мүлдем жазба.
+            3. Мәтіннің басында "Тақырып:" деген сөзді жазба, тек тақырыптың атын жаз.
+            4. Дәріс соңында міндетті түрде 8 бақылау сұрағын жаз.
+            5. Құрылымы: ТАҚЫРЫП (бас әріппен), Кіріспе, Қорытынды, Сұрақтар.
+            6. Көлемі кемінде 3 беттік болсын.`;
+
+            // Модель gemini-2.5-flash-preview-09-2025 для среды Canvas
+            const modelName = "gemini-2.5-flash-preview-09-2025"; 
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: `Тақырыбы: "${topic}" бойынша толық дәріс жаз.` }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+
+            let lastError;
+            // Реализация экспоненциальной задержки (Backoff)
+            for (let i = 0; i < 6; i++) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(`API Error: ${response.status} ${JSON.stringify(errorData)}`);
+                    }
+                    
+                    const data = await response.json();
+                    if (!data.candidates || data.candidates.length === 0) throw new Error("API қатесі: Жауап бос.");
+                    
+                    const text = data.candidates[0].content.parts[0].text;
+                    renderContent(text.replace(/[\*\#\_]/g, ''));
+                    
+                    document.getElementById('editorContainer').classList.remove('hidden');
+                    document.getElementById('exportPanel').classList.remove('hidden');
+                    document.getElementById('toolbar').classList.remove('hidden');
+                    notify("Дәріс дайын!");
+                    
+                    loader.classList.add('hidden');
+                    btnText.textContent = "Генерациялау";
+                    return; // Успех
+                } catch (error) {
+                    lastError = error;
+                    if (i < 5) {
+                        const delay = Math.pow(2, i) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+
+            console.error("All retries failed:", lastError);
+            notify("Қате орын алды. Қайта көріңіз.");
+            document.getElementById('welcome').classList.remove('hidden');
+            loader.classList.add('hidden');
+            btnText.textContent = "Генерациялау";
+        }
+
+        function renderContent(text) {
+            const lines = text.split('\n');
+            let html = "";
+            lines.forEach((line, i) => {
+                const val = line.trim();
+                if (!val) {
+                    html += "<p><br></p>";
+                    return;
+                }
+
+                const lowerVal = val.toLowerCase();
+                if (lowerVal === 'негізгі бөлім' || 
+                    lowerVal === 'негізгі бөлім:' || 
+                    lowerVal === 'мазмұны' || 
+                    lowerVal === 'мазмұны:') return;
+
+                if (i === 0 || (val === val.toUpperCase() && val.length > 5)) {
+                    const cleanVal = val.replace(/^(Тақырып|Тақырыбы|Дәріс тақырыбы):?\s*/i, '');
+                    html += `<h1>${cleanVal}</h1>`;
+                } else if (val.toLowerCase().includes('сұрақтар') || val.toLowerCase().includes('қорытынды')) {
+                    html += `<h2>${val}</h2>`;
+                } else {
+                    html += `<p>${val}</p>`;
+                }
+            });
+            editor.innerHTML = html;
+        }
+
+        function exportToWord() {
+            const filename = (document.getElementById('topicInput').value || "Lektsiya") + ".doc";
+            
+            const header = `
+                <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                <head><meta charset='utf-8'>
+                <style>
+                    @page { size: 21.0cm 29.7cm; margin: 2.0cm 1.5cm 2.0cm 3.0cm; }
+                    body { font-family: 'Times New Roman', serif; font-size: 14pt; line-height: 1.0; color: black; }
+                    h1 { text-align: center; font-weight: bold; text-transform: uppercase; font-size: 16pt; margin-bottom: 12pt; margin-top: 0; line-height: 1.0; }
+                    h2 { text-align: left; font-weight: bold; font-size: 14pt; margin-top: 10pt; margin-bottom: 2pt; text-indent: 35.4pt; line-height: 1.0; }
+                    p { text-align: justify; text-indent: 35.4pt; margin: 0; padding: 0; line-height: 1.0; }
+                <\/style>
+                <\/head><body>`;
+            
+            const footer = "<\/body><\/html>";
+            const content = editor.innerHTML;
+            
+            const blob = new Blob(['\ufeff', header + content + footer], { type: 'application/msword' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+            notify("Word файлы жүктелді!");
+        }
+
+        function exportToPDF() {
+            const filename = (document.getElementById('topicInput').value || "Lektsiya") + ".pdf";
+            notify("PDF дайындалуда...");
+
+            const opt = {
+                margin: [20, 15, 20, 30],
+                filename: filename,
+                image: { type: 'jpeg', quality: 1.0 },
+                html2canvas: { scale: 3, useCORS: true, letterRendering: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+
+            html2pdf().set(opt).from(editor).save().then(() => {
+                notify("PDF жүктелді!");
+            }).catch(err => {
+                notify("PDF қатесі.");
+            });
+        }
+    </script>
+</body>
+</html>
