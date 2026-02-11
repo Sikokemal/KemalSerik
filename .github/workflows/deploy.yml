@@ -33,7 +33,7 @@ jobs:
           echo "Injecting API Key..."
           sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" codebatle.html
           sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" TaskAi.html  
-          sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" PlanLesson.html
+          sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" Planlesson.html
           sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" generatorLecture.html
 
           # Енгізу сәтті болғанын тексеру (маркер қалмауы керек)
