@@ -18,7 +18,7 @@
         .doc-container {
             width: 210mm;
             min-height: 297mm;
-            padding: 20mm 15mm 20mm 30mm;
+            padding: 20mm 20mm 20mm 20mm;
             margin: 20px auto;
             background: white;
             box-shadow: 0 10px 25px rgba(0,0,0,0.1);
@@ -44,9 +44,8 @@
         .main-title {
             text-align: center;
             font-weight: bold;
-            font-size: 13pt;
+            font-size: 12pt;
             margin: 15px 0;
-            text-decoration: underline;
             clear: both;
         }
 
@@ -57,8 +56,8 @@
 
         .section-title {
             font-weight: bold;
-            margin-top: 12px;
-            margin-bottom: 4px;
+            margin-top: 4px;
+            margin-bottom: 2px;
             display: block;
         }
 
@@ -105,7 +104,7 @@
                 box-shadow: none; 
                 margin: 0; 
                 width: 100%; 
-                padding: 10mm 10mm 10mm 20mm; 
+                padding: 20mm; 
             }
         }
     </style>
@@ -174,7 +173,8 @@
         <div class="line-item"><b>Дайындаған оқытушы:</b> Кемал С. Қ.</div>
         <div class="line-item"><b>Курс, топ:</b> <span id="outCourseGroup">...</span></div>
         <div class="line-item"><b>Сабақтың түрі:</b> Аралас сабақ</div>
-        
+        <div class="line-item"><b>Күні:</b> «___» _________ 2026 ж.</div>
+
         <div class="section-title">1. Сабақтың мақсаты:</div>
         <div id="outGoal" class="content-body">...</div>
         
@@ -231,19 +231,24 @@
 
     <script>
 
-        const apiKey = "REPLACE_ME_WITH_API_KEY";
+        const apiKey = "REPLACE_ME_WITH_API_KEY"; // API кілтін осы жерге қойыңыз
+        
         function renderText(id, text) {
-            const el = document.getElementById(id);
-            el.innerHTML = '';
-            if (!text) return;
-            text.split('\n').forEach(line => {
-                if (line.trim()) {
-                    const p = document.createElement('p');
-                    p.innerText = line.trim();
-                    el.appendChild(p);
-                }
-            });
+    const el = document.getElementById(id);
+    el.innerHTML = '';
+    if (!text) return;
+
+    // Жұлдызшаларды (** немесе *), қиғаш сызықтарды (/) және астын сызуды (_) өшіру
+    const cleanText = text.replace(/[\*\\/]/g, '');
+
+    cleanText.split('\n').forEach(line => {
+        if (line.trim()) {
+            const p = document.createElement('p');
+            p.innerText = line.trim();
+            el.appendChild(p);
         }
+    });
+}
 
         async function generatePlan() {
             const topic = document.getElementById('topic').value;
@@ -361,15 +366,18 @@
                 "xmlns:w='urn:schemas-microsoft-com:office:word'>" +
                 "<head><meta charset='utf-8'>" +
                 "<style>" +
-                "@page { size: 21cm 29.7cm; margin: 2cm 1.5cm 2cm 3cm; }" +
+                "@page { size: 21cm 29.7cm; margin: 2cm; }" +
                 "body { font-family:'Times New Roman', serif; font-size:12pt; line-height:1; }" +
                 "p { text-indent:35.4pt; text-align:justify; margin: 0; padding: 0; }" +
-                "table { border-collapse:collapse; width:100%; margin: 10pt 0; }" +
-                "table, td, th { border:1px solid black; padding: 5pt; font-size: 11pt; }" +
+                /* КЕСТЕ ПАРАМЕТРЛЕРІ (Стандартты стиль) */
+        "table { border-collapse:collapse; width:100%; margin: 10pt 0; border: 1px solid black; }" +
+        "table td, table th { border:1px solid black; padding: 5pt; font-size: 11pt; line-height: 1.0; }" +
+        /* Кесте ішіндегі мәтінде абзац шегінісі (отступ) болмауы керек */
+        "table p { text-indent: 0pt; margin: 0pt; padding: 0pt; }" +
                 ".header-college { text-align: center; font-weight: bold; text-transform: uppercase; margin-bottom: 2pt; }" +
                 ".approval-block { float: right; text-align: right; width: 50%; margin-bottom: 15pt; font-size: 12pt; }" +
-                ".main-title { text-align: center; font-weight: bold; font-size: 16pt; text-decoration: underline; margin: 15pt 0; clear: both; }" +
-                ".section-title { font-weight: bold; margin-top: 12pt; margin-bottom: 4pt; }" +
+                ".main-title { text-align: center; font-weight: bold; font-size: 12pt; margin: 15pt 0; clear: both; }" +
+                ".section-title { font-weight: bold; margin-top: 4pt; margin-bottom: 2pt; }" +
                 ".line-item { margin-bottom: 4pt; text-indent: 0; }" +
                 "<\/style>" +
                 "<\/head><body>";
