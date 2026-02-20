@@ -32,7 +32,11 @@
         }
 
         .loader {
-            border-top-color: transparent;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4f46e5;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
             animation: spin 1s linear infinite;
         }
         @keyframes spin {
@@ -197,14 +201,14 @@
         <p class="text-slate-400 text-sm">© 2025 Бағдарламалау оқытушысының ассистенті.</p>
     </footer>
 
-    <!-- Message Box (Instead of Alert) -->
+    <!-- Toast Message -->
     <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 text-white px-6 py-3 rounded-xl shadow-2xl translate-y-20 opacity-0 transition-all z-50 flex items-center gap-3">
-        <i data-lucide="check-circle" class="text-green-400 w-5 h-5"></i>
+        <i data-lucide="check-circle" class="text-green-400 w-5 h-5" id="toast-icon"></i>
         <span id="toast-message">Көшірілді!</span>
     </div>
 
     <script>
-        const apiKey = "REPLACE_ME_WITH_API_KEY";
+        const apiKey = "REPLACE_ME_WITH_API_KEY"; // Автоматты түрде басқарылады
         let currentTech = 'Python';
         let currentLevel = 'Оңай';
         let tasksData = { 'Оңай': [], 'Орташа': [], 'Қиын': [] };
@@ -221,16 +225,21 @@
         const tasksList = document.getElementById('tasks-list');
         const tabBtns = document.querySelectorAll('.tab-btn');
 
-        // Init Tech Buttons
+        // Initialize Tech Buttons
         function initTech() {
+            techContainer.innerHTML = '';
             techOptions.forEach(opt => {
                 const btn = document.createElement('button');
                 btn.className = `tech-btn py-2.5 px-3 rounded-xl text-sm font-semibold border transition-all ${currentTech === opt ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-200'}`;
                 btn.textContent = opt;
                 btn.onclick = () => {
                     currentTech = opt;
-                    document.querySelectorAll('.tech-btn').forEach(b => b.className = 'tech-btn py-2.5 px-3 rounded-xl text-sm font-semibold border transition-all bg-white text-slate-600 border-slate-200 hover:border-indigo-200');
-                    btn.className = 'tech-btn py-2.5 px-3 rounded-xl text-sm font-semibold border transition-all bg-indigo-600 text-white border-indigo-600 shadow-lg scale-[1.02]';
+                    document.querySelectorAll('.tech-btn').forEach(b => {
+                        b.classList.remove('bg-indigo-600', 'text-white', 'border-indigo-600', 'shadow-lg', 'scale-[1.02]');
+                        b.classList.add('bg-white', 'text-slate-600', 'border-slate-200');
+                    });
+                    btn.classList.add('bg-indigo-600', 'text-white', 'border-indigo-600', 'shadow-lg', 'scale-[1.02]');
+                    btn.classList.remove('bg-white', 'text-slate-600', 'border-slate-200');
                     customWrapper.classList.toggle('hidden', opt !== 'Басқа');
                 };
                 techContainer.appendChild(btn);
@@ -253,74 +262,103 @@
             };
         });
 
-        // AI Generation
+        // Gemini API with Exponential Backoff
+        async function fetchWithRetry(url, options, maxRetries = 5) {
+            let retries = 0;
+            while (retries < maxRetries) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.ok) return await response.json();
+                    if (response.status === 429) { // Rate limit
+                        const delay = Math.pow(2, retries) * 1000;
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        retries++;
+                        continue;
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                } catch (e) {
+                    retries++;
+                    if (retries === maxRetries) throw e;
+                    const delay = Math.pow(2, retries) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
         async function fetchTasks() {
-            const topic = document.getElementById('topic').value;
-            const custom = document.getElementById('custom-tech').value;
+            const topic = document.getElementById('topic').value.trim();
+            const custom = document.getElementById('custom-tech').value.trim();
             const actualTech = currentTech === 'Басқа' ? custom : currentTech;
             const count = taskCountSlider.value;
 
-            if (!topic) return showToast("Тақырыпты толтырыңыз!", "alert-circle");
+            if (!topic) {
+                showToast("Тақырыпты толтырыңыз!", "alert-circle");
+                return;
+            }
 
             generateBtn.disabled = true;
-            generateBtn.innerHTML = `<div class="loader w-5 h-5 border-2 border-white rounded-full"></div> <span>Дайындалуда...</span>`;
+            generateBtn.innerHTML = `<div class="loader"></div> <span>Дайындалуда...</span>`;
+            
             emptyState.classList.add('hidden');
             resultsContainer.classList.add('hidden');
             loadingState.classList.remove('hidden');
 
             const systemPrompt = `Сен бағдарламалау пәнінің оқытушысына көмектесетін ИИ ассистентсің. Тақырып бойынша 3 деңгейге тапсырма жаса. Тіл: Қазақша. JSON форматында қайтар: {"Оңай": [], "Орташа": [], "Қиын": []}. Әр объект: {"title": "", "description": "", "requirement": "", "example": ""}`;
-            const userPrompt = `Тақырыбы: ${topic}. Пән: ${actualTech}. Әр деңгейге ${count} тапсырма.`;
+            const userPrompt = `Тақырыбы: ${topic}. Пән: ${actualTech}. Әр деңгейге ${count} тапсырма жаса. Жауабың тек қана таза JSON болуы керек.`;
 
-            let retries = 0;
-            const maxRetries = 5;
-
-            const makeCall = async (delay) => {
-                try {
-                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+            try {
+                const data = await fetchWithRetry(
+                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`,
+                    {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             contents: [{ parts: [{ text: userPrompt }] }],
                             systemInstruction: { parts: [{ text: systemPrompt }] },
-                            generationConfig: { responseMimeType: "application/json" }
+                            generationConfig: { 
+                                responseMimeType: "application/json",
+                                temperature: 0.7
+                            }
                         })
-                    });
-
-                    if (!response.ok) throw new Error();
-                    const data = await response.json();
-                    tasksData = JSON.parse(data.candidates[0].content.parts[0].text);
-                    
-                    loadingState.classList.add('hidden');
-                    resultsContainer.classList.remove('hidden');
-                    renderTasks();
-                } catch (e) {
-                    if (retries < maxRetries) {
-                        retries++;
-                        setTimeout(() => makeCall(delay * 2), delay);
-                    } else {
-                        showToast("API қатесі. Қайталап көріңіз.", "alert-circle");
-                        loadingState.classList.add('hidden');
-                        emptyState.classList.remove('hidden');
                     }
-                } finally {
-                    if (retries === 0 || retries === maxRetries) {
-                        generateBtn.disabled = false;
-                        generateBtn.innerHTML = `<i data-lucide="sparkles" class="w-5 h-5"></i> <span>Барлық деңгейді дайындау</span>`;
-                        lucide.createIcons();
-                    }
-                }
-            };
+                );
 
-            await makeCall(1000);
+                const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!responseText) throw new Error("Empty response from AI");
+
+                tasksData = JSON.parse(responseText);
+                
+                loadingState.classList.add('hidden');
+                resultsContainer.classList.remove('hidden');
+                renderTasks();
+                showToast("Тапсырмалар сәтті дайындалды!");
+
+            } catch (error) {
+                console.error("AI Error:", error);
+                showToast("Қате орын алды. Қайталап көріңіз.", "alert-circle");
+                loadingState.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.innerHTML = `<i data-lucide="sparkles" class="w-5 h-5"></i> <span>Барлық деңгейді дайындау</span>`;
+                lucide.createIcons();
+            }
         }
 
         function renderTasks() {
             tasksList.innerHTML = '';
             const list = tasksData[currentLevel] || [];
             
+            if (list.length === 0) {
+                tasksList.innerHTML = `<div class="text-center p-10 text-slate-400">Бұл деңгейде тапсырмалар жоқ.</div>`;
+                return;
+            }
+
             list.forEach((task, idx) => {
                 const card = document.createElement('div');
                 card.className = "task-card bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden hover:shadow-xl hover:shadow-indigo-500/5 transition-all group border-l-8 border-l-indigo-500";
+                
+                // Content construction
                 card.innerHTML = `
                     <div class="p-8">
                         <div class="flex justify-between items-start mb-6">
@@ -328,7 +366,7 @@
                                 <span class="flex items-center justify-center w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 font-black text-lg border border-indigo-100">${idx + 1}</span>
                                 <h3 class="text-xl font-bold text-slate-800">${task.title}</h3>
                             </div>
-                            <button onclick="copyTask(${JSON.stringify(task).replace(/"/g, '&quot;')})" class="p-3 bg-slate-50 hover:bg-indigo-50 rounded-xl text-slate-400 hover:text-indigo-600 transition-all active:scale-90">
+                            <button class="copy-btn p-3 bg-slate-50 hover:bg-indigo-50 rounded-xl text-slate-400 hover:text-indigo-600 transition-all active:scale-90">
                                 <i data-lucide="copy" class="w-5 h-5"></i>
                             </button>
                         </div>
@@ -352,34 +390,44 @@
                                         <h4 class="text-xs font-bold text-indigo-500 uppercase mb-4">Мысал:</h4>
                                         <pre class="text-indigo-100 font-mono text-sm leading-relaxed whitespace-pre-wrap">${task.example}</pre>
                                     </div>
-                                ` : ''}
+                                ` : '<div class="h-full flex items-center justify-center border-2 border-dashed border-slate-100 rounded-2xl text-slate-300 text-xs">Мысал жоқ</div>'}
                             </div>
                         </div>
                     </div>
                 `;
+
+                // Copy button logic using document.execCommand
+                card.querySelector('.copy-btn').onclick = () => {
+                    const textToCopy = `[${currentLevel}] ${task.title}\n\n${task.description}\n\nТалаптар:\n${task.requirement}\n\nМысал:\n${task.example}`;
+                    const textArea = document.createElement("textarea");
+                    textArea.value = textToCopy;
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        document.execCommand('copy');
+                        showToast("Мәтін көшірілді!");
+                    } catch (err) {
+                        showToast("Көшіру мүмкін болмады", "alert-circle");
+                    }
+                    document.body.removeChild(textArea);
+                };
+
                 tasksList.appendChild(card);
             });
             lucide.createIcons();
         }
 
-        function copyTask(task) {
-            const text = `[${currentLevel}] ${task.title}\n\n${task.description}\n\nТалаптар:\n${task.requirement}\n\nМысал:\n${task.example}`;
-            const el = document.createElement('textarea');
-            el.value = text;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            showToast("Мәтін көшірілді!");
-        }
-
         function showToast(msg, icon = "check-circle") {
             const toast = document.getElementById('toast');
-            document.getElementById('toast-message').textContent = msg;
+            const toastMsg = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+            
+            toastMsg.textContent = msg;
             toast.classList.remove('translate-y-20', 'opacity-0');
+            
             setTimeout(() => {
                 toast.classList.add('translate-y-20', 'opacity-0');
-            }, 2500);
+            }, 3000);
         }
 
         generateBtn.onclick = fetchTasks;
