@@ -106,25 +106,37 @@
     // ВС КОДЕ: Осы жерге apiKey қоюды ұмытпаңыз
     const apiKey = "REPLACE_ME_WITH_API_KEY";
     
-    const PYTHON_BASE = [
-        { q: "Python-да айнымалыға мән беру таңбасы?", options: ["=", "==", ":=", "->"], correct: 0 },
-        { q: "Экранға шығару функциясы?", options: ["echo", "log", "print", "write"], correct: 2 },
-        { q: "Тізім (list) құру жақшасы?", options: ["()", "{}", "[]", "<>"], correct: 2 },
-        { q: "Дерек түрін қалай тексереді?", options: ["check()", "type()", "kind()", "var()"], correct: 1 },
-        { q: "Циклді тоқтату операторы?", options: ["exit", "stop", "break", "end"], correct: 2 },
-        { q: "Бүтін санды бөлу (целое деление)?", options: ["/", "%", "//", "div"], correct: 2 },
-        { q: "Сөздік (dict) құру жақшасы?", options: ["[]", "()", "{}", "<>"], correct: 2 },
-        { q: "Жол ұзындығын анықтау?", options: ["size()", "len()", "length()", "count()"], correct: 1 },
-        { q: "Түсініктеме таңбасы?", options: ["//", "/*", "#", "--"], correct: 2 },
-        { q: "range(5) қандай саннан басталады?", options: ["1", "0", "5", "-1"], correct: 1 }
-    ];
+ const PYTHON_BASE = [
+    // --- Шартты операторлар синтаксисі (1-10) ---
+    { q: "Python-да шартты оператор қай кілттік сөзден басталады?", options: ["when", "if", "case", "given"], correct: 1 },
+    { q: "Шарттан кейін міндетті түрде қандай таңба қойылады?", options: [";", "->", ":", "{}"], correct: 2 },
+    { q: "Бірнеше шартты тексеру үшін (иначе если) қай оператор қолданылады?", options: ["elseif", "else if", "elif", "elsif"], correct: 2 },
+    { q: "Барлық шарттар жалған болғанда орындалатын блок?", options: ["else", "finally", "default", "otherwise"], correct: 0 },
+    { q: "Python-да шарт ішіндегі код қалай бөлінеді?", options: ["Жақшамен", "Бос орын (отступ) арқылы", "Үтірмен", "Сызықшамен"], correct: 1 },
+    { q: "Мәннің тең екендігін тексеру операторы?", options: ["=", "==", "is", "==="], correct: 1 },
+    { q: "Мәннің тең емес екендігін тексеру операторы?", options: ["!=", "<>", "not =", "/="], correct: 0 },
+    { q: "Шартты операторда 'артық немесе тең' қалай жазылады?", options: ["=>", ">=", "=>=", ">"], correct: 1 },
+    { q: "Логикалық теріске шығару (отрицание) операторы?", options: ["!", "not", "no", "false"], correct: 1 },
+    { q: "0 < x < 10 жазбасы Python-да қате болып санала ма?", options: ["Иә", "Жоқ", "Тек if-сіз қате", "Жақшасыз қате"], correct: 1 },
 
+    // --- Логикалық амалдар мен логика (11-20) ---
+    { q: "Екі шарт та ақиқат болғанда ғана True беретін оператор?", options: ["or", "and", "&&", "concat"], correct: 1 },
+    { q: "Кем дегенде бір шарт ақиқат болса True беретін оператор?", options: ["and", "any", "or", "||"], correct: 2 },
+    { q: "bool(0) мәні неге тең?", options: ["True", "False", "None", "Error"], correct: 1 },
+    { q: "Тізімде элементтің бар-жоғын тексеретін оператор?", options: ["has", "find", "in", "contains"], correct: 2 },
+    { q: "if-elif-else құрылымында неше else болуы мүмкін?", options: ["Шексіз", "2", "1", "Else міндетті емес"], correct: 2 },
+    { q: "x = 5; if x > 3: print('A') else: print('B') нәтижесі?", options: ["A", "B", "Error (Syntax)", "A B"], correct: 2 },
+    { q: "if True: блогы әрқашан орындала ма?", options: ["Иә", "Жоқ", "Шартқа байланысты", "Қате"], correct: 0 },
+    { q: "Бос жол ('') логикалық тұрғыдан неге тең?", options: ["True", "False", "None", "0"], correct: 1 },
+    { q: "not (5 > 3) өрнегінің нәтижесі қандай?", options: ["True", "False", "None", "5"], correct: 1 },
+    { q: "if ішінде тағы бір if қолдануға бола ма?", options: ["Болмайды", "Тек elif арқылы", "Болады (вложенный)", "Тек else ішінде"], correct: 2 }
+];
     let gameQuestions = [...PYTHON_BASE];
 
     const ATTACK_MODES = [
         { id: 'standard', name: 'ШАБУЫЛ', icon: 'swords', damage: 20, selfDmg: 10, heal: 0, color: 'bg-blue-600' },
         { id: 'mega', name: 'ЖОЮ (1 рет)', icon: 'skull', damage: 65, selfDmg: 45, heal: 0, color: 'bg-orange-600' },
-        { id: 'drain', name: 'СІҢІРУ', icon: 'activity', damage: 15, selfDmg: 5, heal: 25, color: 'bg-emerald-600' }
+        { id: 'drain', name: 'ЕМДЕЛУ', icon: 'activity', damage: 15, selfDmg: 5, heal: 25, color: 'bg-emerald-600' }
     ];
 
     const AVATARS = ['ghost', 'flame', 'zap', 'shield', 'rocket', 'cpu'];
@@ -152,8 +164,8 @@
         state.loadingMsg = "AI ЖҮЙЕСІНЕ ҚОСЫЛУДА...";
         render();
 
-        const systemPrompt = `Сен интеллектуалды жекпе-жекке арналған сұрақтар генераторысың. Пайдаланушы берген тақырып бойынша 10 қиын сұрақ дайында. Тіл: Қазақша. Формат: JSON.`;
-        const userQuery = `Тақырып: ${topic}. Сұрақ саны: 10.`;
+        const systemPrompt = `Сен интеллектуалды жекпе-жекке арналған сұрақтар генераторысың. Пайдаланушы берген тақырып бойынша 20 қиын сұрақ дайында. Тіл: Қазақша. Формат: JSON.`;
+        const userQuery = `Тақырып: ${topic}. Сұрақ саны: 20.`;
 
         const payload = {
             contents: [{ parts: [{ text: userQuery }] }],
@@ -478,3 +490,4 @@
 </script>
 </body>
 </html>
+
