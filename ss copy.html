@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyMaze 3D - Continuous Movement Logic</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;700&display=swap');
+        
+        body { 
+            background-color: #0b0d17; 
+            color: #f8fafc; 
+            font-family: 'Inter', sans-serif; 
+            overflow: hidden; 
+        }
+
+        .glass-panel {
+            background: rgba(21, 25, 38, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+        }
+
+        .code-editor {
+            font-family: 'Fira Code', monospace;
+            background: #0f111a;
+            resize: none;
+            line-height: 1.6;
+            tab-size: 4;
+            border: none;
+            color: #d1d5db;
+        }
+
+        .btn-primary {
+            background: #6366f1;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
+        }
+
+        .btn-primary:hover {
+            background: #4f46e5;
+            transform: translateY(-1px);
+        }
+
+        .console {
+            background: #080a0f;
+            color: #94a3b8;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .energy-input-field {
+            background: #1e2330;
+            border: 1px solid #334155;
+            color: #10b981;
+            font-weight: bold;
+            text-align: center;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        canvas { border-radius: 12px; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col p-4 md:p-6 gap-6">
+
+    <div class="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
+        
+        <!-- Левая часть: 3D Игра -->
+        <div class="flex-1 relative flex flex-col gap-4">
+            <div class="glass-panel p-6 shadow-2xl">
+                <div class="flex justify-between items-start mb-2">
+                    <span id="level-display" class="text-indigo-400 text-xs font-bold uppercase tracking-widest text-[10px]">Логикалық есептеу</span>
+                    <div class="flex gap-1">
+                        <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                        <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                        <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                    </div>
+                </div>
+                <p id="task-desc" class="text-lg font-bold leading-tight max-w-xl">
+                    Финишке жетіңіз. <br>
+                    <span class="text-emerald-400 font-mono text-sm uppercase text-[12px]">Formula: energy = (up + right + left) * 20</span>
+                </p>
+            </div>
+
+            <div class="flex-1 relative glass-panel overflow-hidden border border-white/5 shadow-inner">
+                <div id="canvas-container" class="w-full h-full"></div>
+                <div class="absolute top-4 left-4 flex flex-col gap-2">
+                    <div class="bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 uppercase tracking-widest">SYSTEM: ONLINE</div>
+                    <div id="var-display" class="bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded text-[10px] font-bold border border-indigo-500/20 uppercase tracking-widest leading-loose">
+                        U: 6 | R: 5 | L: 5
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Правая часть: Редактор -->
+        <div class="w-full md:w-[500px] flex flex-col glass-panel overflow-hidden shadow-2xl border border-white/5">
+            <div class="bg-[#151926] px-4 py-3 flex justify-between items-center border-b border-white/5">
+                <div class="flex items-center gap-4">
+                    <div class="flex gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#ff5f56]"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#27c93f]"></div>
+                    </div>
+                    <span class="text-xs text-slate-400 font-medium font-mono text-[10px]">controller.py</span>
+                </div>
+                <button id="show-answer-btn" class="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-md hover:bg-indigo-500/20 transition-all uppercase font-bold tracking-tighter">
+                    Көмек
+                </button>
+            </div>
+
+            <textarea id="editor" class="code-editor flex-1 p-6 outline-none text-sm" spellcheck="false" placeholder="# Напишите код и проверьте энергию..."></textarea>
+            
+            <div class="p-6 bg-[#0f111a] border-t border-white/5">
+                <div class="flex items-center gap-4 mb-4 bg-[#1e2330]/50 p-3 rounded-xl border border-white/5">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-tighter text-[10px]">Энергия:</span>
+                    <input type="number" id="energy-input" class="energy-input-field w-24 py-1" value="0">
+                </div>
+
+                <div class="flex gap-3 mb-4">
+                    <button id="run-btn" class="btn-primary flex-1 py-4 rounded-xl font-bold text-white flex items-center justify-center gap-3 tracking-widest">
+                        ІСКЕ ҚОСУ
+                    </button>
+                    <button id="reset-btn" class="bg-[#1e2330] px-4 py-4 rounded-xl hover:bg-[#2d3446] transition-colors text-slate-400 text-xs font-bold uppercase">
+                        Reset
+                    </button>
+                </div>
+                <div class="console h-32 overflow-y-auto p-4 rounded-lg border border-white/5 shadow-inner" id="console-out">
+                    <div id="log-content" class="space-y-1">LOGIC WAITING...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно победы -->
+    <div id="win-modal" class="fixed inset-0 bg-black/95 hidden items-center justify-center z-50 p-4 backdrop-blur-sm">
+        <div class="glass-panel p-10 max-w-sm w-full text-center border-indigo-500/30">
+            <h2 class="text-3xl font-bold text-white mb-2">КЕРЕМЕТ! 🏆</h2>
+            <p class="text-slate-400 mb-8 leading-relaxed">Сіз энергияны дұрыс есептеп, мәреге жеттіңіз!</p>
+            <button id="next-level-btn" class="btn-primary w-full py-4 rounded-2xl text-white font-bold text-lg">Қайталау</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно подсказки -->
+    <div id="answer-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4 backdrop-blur-md">
+        <div class="glass-panel p-6 rounded-xl max-w-md w-full border border-slate-600">
+            <h3 class="text-emerald-400 font-bold mb-4 uppercase text-xs tracking-widest">Дұрыс код үлгісі:</h3>
+            <pre id="answer-text" class="bg-slate-900 p-4 rounded-lg text-emerald-100 text-xs font-mono mb-6 border border-slate-700"></pre>
+            <button onclick="document.getElementById('answer-modal').style.display='none'" class="w-full py-2 bg-slate-700 rounded-lg text-white font-bold uppercase text-[10px]">Жабу</button>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, player, goal;
+        let walls = [];
+        let isMoving = false;
+        const CELL_SIZE = 4;
+        
+        let playerPos = { x: 0, z: 0 };
+        let playerDir = 0; // 0: N, 1: E, 2: S, 3: W
+        let variables = { energy: 0, up: 0, right: 0, left: 0 };
+
+        const currentLevelData = {
+            map: [
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0], // Финиш
+                [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], 
+                [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], 
+                [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], 
+                [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0], 
+                [0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0], // Поворот
+                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 
+                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 
+                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 
+                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 
+                [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 
+                [0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // Старт (1, 12)
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+            ],
+            start: {x: 1, z: 12},
+            solution: "up = 6\nright = 5\nleft = 5\n\nif (up + right + left) * 20 == 320:\n    print('Жол ашық')\nelse:\n    print('Қате')"
+        };
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b0d17);
+            
+            camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const pLight = new THREE.PointLight(0x6366f1, 2, 100);
+            pLight.position.set(0, 20, 15);
+            scene.add(pLight);
+
+            loadLevel();
+            animate();
+        }
+
+        function loadLevel() {
+            const lvl = currentLevelData;
+            walls.forEach(w => scene.remove(w.mesh));
+            walls = [];
+            if(player) scene.remove(player);
+            if(goal) scene.remove(goal);
+
+            lvl.map.forEach((row, z) => {
+                row.forEach((type, x) => {
+                    const px = (x - (lvl.map[0].length/2)) * CELL_SIZE;
+                    const pz = (z - (lvl.map.length/2)) * CELL_SIZE;
+                    if (type === 0) {
+                        const m = new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE, 3.5, CELL_SIZE), new THREE.MeshStandardMaterial({ color: 0x1e2330 }));
+                        m.position.set(px, 1.75, pz);
+                        scene.add(m);
+                        walls.push({x, z, mesh: m});
+                    } else if (type === 3) {
+                        goal = new THREE.Mesh(new THREE.TorusKnotGeometry(0.7, 0.25, 32, 12), new THREE.MeshStandardMaterial({ color: 0xeab308, emissive: 0xeab308, emissiveIntensity: 0.5 }));
+                        goal.position.set(px, 2, pz);
+                        scene.add(goal);
+                    }
+                });
+            });
+
+            player = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.8, 1.8), new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x10b981, emissiveIntensity: 0.2 }));
+            scene.add(player);
+            
+            playerPos = { ...lvl.start };
+            playerDir = 0;
+            variables = { up: 0, right: 0, left: 0 };
+            syncPlayer();
+        }
+
+        function syncPlayer() {
+            const lvl = currentLevelData;
+            player.position.x = (playerPos.x - (lvl.map[0].length/2)) * CELL_SIZE;
+            player.position.z = (playerPos.z - (lvl.map.length/2)) * CELL_SIZE;
+            player.position.y = 0.9;
+            player.rotation.y = -playerDir * (Math.PI/2);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if(goal) goal.rotation.y += 0.02;
+            camera.position.lerp(new THREE.Vector3(player.position.x, 30, player.position.z + 30), 0.1);
+            camera.lookAt(player.position);
+            renderer.render(scene, camera);
+        }
+
+        async function runCode() {
+            if(isMoving) return;
+            isMoving = true;
+            document.getElementById('log-content').innerHTML = '';
+            loadLevel();
+            
+            const energyInputStr = document.getElementById('energy-input').value;
+            const energyValue = parseInt(energyInputStr) || 0;
+            log(`Жүйе: energy = ${energyValue}`, "#6366f1");
+
+            const lines = document.getElementById('editor').value.split('\n');
+            
+            try {
+                // Пытаемся распарсить логику (даже если там ошибки)
+                let logicSuccess = await executeStrictLogic(lines);
+                
+                // Если логика или энергия неверны — выводим ошибку, но НЕ останавливаем персонажа
+                const correctEnergy = (6 + 5 + 5) * 20; // 320
+                if (!logicSuccess || energyValue !== correctEnergy) {
+                    log("ҚАТЕ", "#ef4444");
+                } else {
+                    log("Шарт орындалды", "#10b981");
+                }
+
+                // Персонаж идет столько, сколько позволяет энергия (1 шаг = 20 ед)
+                let allowedSteps = Math.floor(energyValue / 20);
+                let takenSteps = 0;
+
+                // 1. Сегмент UP (по коду пользователя)
+                for(let i=0; i < (variables.up || 99); i++) {
+                    if(takenSteps >= allowedSteps) break;
+                    await moveOneStep(0); takenSteps++;
+                }
+
+                // 2. Сегмент RIGHT
+                if(takenSteps < allowedSteps) {
+                    playerDir = 1; syncPlayer(); await new Promise(r => setTimeout(r, 400));
+                    for(let i=0; i < (variables.right || 99); i++) {
+                        if(takenSteps >= allowedSteps) break;
+                        await moveOneStep(1); takenSteps++;
+                    }
+                }
+
+                // 3. Сегмент LEFT (North снова)
+                if(takenSteps < allowedSteps) {
+                    playerDir = 0; syncPlayer(); await new Promise(r => setTimeout(r, 400));
+                    for(let i=0; i < (variables.left || 99); i++) {
+                        if(takenSteps >= allowedSteps) break;
+                        await moveOneStep(0); takenSteps++;
+                    }
+                }
+
+                // Финальная проверка на победу
+                if(checkWin() && takenSteps == 16 && energyValue == 320) {
+                    document.getElementById('win-modal').style.display = 'flex';
+                } else if (takenSteps >= allowedSteps && energyValue > 0) {
+                    log("Энергия бітті", "#94a3b8");
+                }
+            } catch (e) {
+                log("ҚАТЕ", "#ef4444");
+            }
+            isMoving = false;
+        }
+
+        async function executeStrictLogic(lines) {
+            let tempVars = { up: 0, right: 0, left: 0 };
+            let ifValid = false;
+
+            for (let line of lines) {
+                let t = line.trim();
+                if (!t || t.startsWith('#')) continue;
+
+                if (t.includes('=')) {
+                    let p = t.split('=');
+                    let n = p[0].trim();
+                    let v = parseInt(p[1].trim());
+                    if (tempVars.hasOwnProperty(n)) tempVars[n] = v;
+                }
+
+                if (t.startsWith('if ')) {
+                    let condition = t.replace('if ', '').replace(':', '').trim();
+                    try {
+                        let expr = condition.replace(/[a-z]+/g, m => tempVars[m] || 0);
+                        if (expr.includes('==')) {
+                            let sides = expr.split('==');
+                            if (eval(sides[0]) == eval(sides[1])) ifValid = true;
+                        }
+                    } catch(e) {}
+                }
+            }
+            
+            variables = tempVars; // Сохраняем распарсенные значения для ходьбы
+            return tempVars.up === 6 && tempVars.right === 5 && tempVars.left === 5 && ifValid;
+        }
+
+        async function moveOneStep(dir) {
+            playerDir = dir;
+            let nx = playerPos.x, nz = playerPos.z;
+            if(dir === 0) nz--; else if(dir === 1) nx++; else if(dir === 2) nz++; else nx--;
+            
+            if(isWall(nx, nz)) {
+                log("ҚАТЕ: Соғылу!", "#ef4444");
+                throw new Error("CRASH");
+            }
+            playerPos.x = nx; playerPos.z = nz;
+            syncPlayer();
+            await new Promise(r => setTimeout(r, 600));
+        }
+
+        function isWall(x, z) {
+            const map = currentLevelData.map;
+            if(z < 0 || z >= map.length || x < 0 || x >= map[0].length) return true;
+            return map[z][x] === 0;
+        }
+
+        function checkWin() {
+            return currentLevelData.map[playerPos.z][playerPos.x] === 3;
+        }
+
+        function log(m, c) {
+            const d = document.createElement('div');
+            d.style.color = c;
+            d.innerHTML = `<span style="opacity: 0.3">></span> ${m}`;
+            document.getElementById('log-content').appendChild(d);
+            document.getElementById('console-out').scrollTop = 9999;
+        }
+
+        document.getElementById('run-btn').onclick = runCode;
+        document.getElementById('reset-btn').onclick = () => loadLevel();
+        document.getElementById('next-level-btn').onclick = () => location.reload();
+        document.getElementById('show-answer-btn').onclick = () => {
+            document.getElementById('answer-text').textContent = currentLevelData.solution;
+            document.getElementById('answer-modal').style.display = 'flex';
+        };
+
+        window.onload = init3D;
+    </script>
+</body>
+</html>

@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyMaze 3D - Energy Collision</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@400;700&display=swap');
+        
+        body { 
+            background-color: #0b0d17; 
+            color: #f8fafc; 
+            font-family: 'Inter', sans-serif; 
+            overflow: hidden; 
+        }
+
+        .glass-panel {
+            background: rgba(21, 25, 38, 0.8);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+        }
+
+        .code-editor {
+            font-family: 'Fira Code', monospace;
+            background: #0f111a;
+            resize: none;
+            line-height: 1.6;
+            tab-size: 4;
+            border: none;
+            color: #d1d5db;
+        }
+
+        .btn-primary {
+            background: #6366f1;
+            transition: all 0.2s;
+            box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
+        }
+
+        .btn-primary:hover {
+            background: #4f46e5;
+            transform: translateY(-1px);
+        }
+
+        .console {
+            background: #080a0f;
+            color: #94a3b8;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .energy-input-field {
+            background: #1e2330;
+            border: 1px solid #334155;
+            color: #10b981;
+            font-weight: bold;
+            text-align: center;
+            border-radius: 8px;
+            outline: none;
+        }
+
+        canvas { border-radius: 12px; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+    </style>
+</head>
+<body class="h-screen flex flex-col p-4 md:p-6 gap-6">
+
+    <div class="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
+        
+        <div class="flex-1 relative flex flex-col gap-4">
+            <div class="glass-panel p-6 shadow-2xl">
+                <div class="flex justify-between items-start mb-2">
+                    <span id="level-display" class="text-indigo-400 text-xs font-bold uppercase tracking-widest text-[10px]">Деңгей 1</span>
+                    <div class="flex gap-1">
+                        <div class="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                        <div class="w-1.5 h-1.5 rounded-full bg-slate-700"></div>
+                        <div class="w-1.5 h-1.5 rounded-full bg-slate-700"></div>
+                    </div>
+                </div>
+                <p id="task-desc" class="text-lg font-bold leading-tight max-w-xl">
+                    Финишке жетіңіз. <br>
+                    <span class="text-xs font-normal text-slate-400">Егер энергия 100-ден асса, кейіпкер қабырғаға соғылады!</span>
+                </p>
+            </div>
+
+            <div class="flex-1 relative glass-panel overflow-hidden border border-white/5">
+                <div id="canvas-container" class="w-full h-full"></div>
+                <div class="absolute top-4 left-4 flex gap-2">
+                    <div class="bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded text-[10px] font-bold border border-emerald-500/20 uppercase">SYSTEM: ONLINE</div>
+                    <div id="var-qadam" class="bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded text-[10px] font-bold border border-indigo-500/20 uppercase">qadam: 0</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full md:w-[500px] flex flex-col glass-panel overflow-hidden shadow-2xl border border-white/5">
+            <div class="bg-[#151926] px-4 py-3 flex justify-between items-center border-b border-white/5">
+                <div class="flex items-center gap-4">
+                    <div class="flex gap-1.5">
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#ff5f56]"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]"></div>
+                        <div class="w-2.5 h-2.5 rounded-full bg-[#27c93f]"></div>
+                    </div>
+                    <span class="text-xs text-slate-400 font-medium">controller.py</span>
+                </div>
+                <button id="show-answer-btn" class="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-md hover:bg-indigo-500/20 transition-all uppercase font-bold tracking-tighter">
+                    Көмек
+                </button>
+            </div>
+
+            <textarea id="editor" class="code-editor flex-1 p-6 outline-none text-sm" spellcheck="false" placeholder="# Кодты осында жазыңыз..."></textarea>
+            
+            <div class="p-6 bg-[#0f111a] border-t border-white/5">
+                <div class="flex items-center gap-4 mb-4 bg-[#1e2330]/50 p-3 rounded-xl border border-white/5">
+                    <span class="text-xs font-bold text-slate-400 uppercase tracking-tighter text-[10px]">Энергия:</span>
+                    <input type="number" id="energy-input" class="energy-input-field w-24 py-1" value="0">
+                </div>
+
+                <div class="flex gap-3 mb-4">
+                    <button id="run-btn" class="btn-primary flex-1 py-4 rounded-xl font-bold text-white flex items-center justify-center gap-3">
+                        ІСКЕ ҚОСУ
+                    </button>
+                    <button id="reset-btn" class="bg-[#1e2330] p-4 rounded-xl hover:bg-[#2d3446] transition-colors text-slate-400 text-xs font-bold uppercase">
+                        Reset
+                    </button>
+                </div>
+                <div class="console h-32 overflow-y-auto p-4 rounded-lg border border-white/5" id="console-out">
+                    <div id="log-content" class="space-y-1">LOGIC WAITING...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="win-modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4 backdrop-blur-md">
+        <div class="glass-panel p-10 max-w-sm w-full text-center border-indigo-500/30">
+            <h2 class="text-3xl font-bold text-white mb-2">КЕРЕМЕТ!</h2>
+            <p class="text-slate-400 mb-8 leading-relaxed">Сіз энергияны дұрыс есептеп, мәреге жеттіңіз!</p>
+            <div class="flex flex-col gap-3">
+                <button id="next-level-btn" class="btn-primary w-full py-4 rounded-2xl text-white font-bold text-lg uppercase">
+                    Келесі кезең
+                </button>
+                <button onclick="location.reload()" class="bg-slate-800 hover:bg-slate-700 w-full py-3 rounded-2xl text-slate-300 font-bold text-sm uppercase transition-colors">
+                    Қайталау
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="answer-modal" class="fixed inset-0 bg-black/80 hidden items-center justify-center z-50 p-4 backdrop-blur-md">
+        <div class="glass-panel p-6 rounded-xl max-w-md w-full border border-slate-600">
+            <h3 class="text-emerald-400 font-bold mb-4 uppercase text-sm tracking-widest text-[10px]">Дұрыс код үлгісі:</h3>
+            <pre id="answer-text" class="bg-slate-900 p-4 rounded-lg text-emerald-100 text-xs font-mono mb-6 border border-slate-700"></pre>
+            <button onclick="document.getElementById('answer-modal').style.display='none'" class="w-full py-2 bg-slate-700 rounded-lg text-white font-bold uppercase text-xs">Жабу</button>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, player, goal;
+        let walls = [];
+        let isMoving = false;
+        const CELL_SIZE = 4;
+        
+        let playerPos = { x: 0, z: 0 };
+        let playerDir = 0; 
+        let variables = { energy: 0, qadam: 0 };
+
+        const currentLevelData = {
+            map: [
+                [0, 0, 0], 
+                [0, 3, 0], 
+                [0, 1, 0], 
+                [0, 1, 0], 
+                [0, 1, 0], 
+                [0, 1, 0], 
+                [0, 2, 0]  
+            ],
+            start: {x: 1, z: 6},
+            solution: "if energy == 100:\n    qadam = 5\nelif energy == 80:\n    qadam = 4\nelif energy == 40:\n    qadam = 2\nelse:\n    qadam = energy / 20"
+        };
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0b0d17);
+            
+            camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            container.appendChild(renderer.domElement);
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const pLight = new THREE.PointLight(0x6366f1, 2, 100);
+            pLight.position.set(0, 15, 5);
+            scene.add(pLight);
+
+            loadLevel();
+            animate();
+        }
+
+        function loadLevel() {
+            const lvl = currentLevelData;
+            walls.forEach(w => scene.remove(w.mesh));
+            walls = [];
+            if(player) scene.remove(player);
+            if(goal) scene.remove(goal);
+
+            lvl.map.forEach((row, z) => {
+                row.forEach((type, x) => {
+                    const px = (x - (lvl.map[0].length/2)) * CELL_SIZE;
+                    const pz = (z - (lvl.map.length/2)) * CELL_SIZE;
+                    if (type === 0) {
+                        const m = new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE, 3, CELL_SIZE), new THREE.MeshStandardMaterial({ color: 0x1e2330 }));
+                        m.position.set(px, 1.5, pz);
+                        scene.add(m);
+                        walls.push({x, z, mesh: m});
+                    } else if (type === 3) {
+                        goal = new THREE.Mesh(new THREE.TorusKnotGeometry(0.7, 0.2, 32, 8), new THREE.MeshStandardMaterial({ color: 0xeab308, emissive: 0xeab308, emissiveIntensity: 0.5 }));
+                        goal.position.set(px, 2, pz);
+                        scene.add(goal);
+                    }
+                });
+            });
+
+            player = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.6, 1.6), new THREE.MeshStandardMaterial({ color: 0x10b981, emissive: 0x10b981, emissiveIntensity: 0.2 }));
+            scene.add(player);
+            
+            playerPos = { ...lvl.start };
+            playerDir = 0;
+            variables.qadam = 0;
+            updateUI();
+            syncPlayer();
+        }
+
+        function updateUI() {
+            document.getElementById('var-qadam').textContent = `qadam: ${variables.qadam}`;
+        }
+
+        function syncPlayer() {
+            const lvl = currentLevelData;
+            player.position.x = (playerPos.x - (lvl.map[0].length/2)) * CELL_SIZE;
+            player.position.z = (playerPos.z - (lvl.map.length/2)) * CELL_SIZE;
+            player.position.y = 0.8;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if(goal) goal.rotation.y += 0.02;
+            camera.position.lerp(new THREE.Vector3(player.position.x, 18, player.position.z + 18), 0.1);
+            camera.lookAt(player.position);
+            renderer.render(scene, camera);
+        }
+
+        async function runCode() {
+            if(isMoving) return;
+            isMoving = true;
+            document.getElementById('log-content').innerHTML = '';
+            loadLevel();
+            
+            const energyInput = document.getElementById('energy-input').value;
+            variables.energy = parseInt(energyInput) || 0;
+            variables.qadam = 0;
+            log(`energy = ${variables.energy}`, "#6366f1");
+
+            const lines = document.getElementById('editor').value.split('\n');
+            
+            try {
+                await execute(lines, 0, lines.length);
+                
+                if(variables.qadam > 0) {
+                    log(`Жүйе: қадамдарды орындау...`, "#10b981");
+                    for(let k=0; k < variables.qadam; k++) {
+                        try {
+                            await moveStep();
+                        } catch(e) {
+                            log("ҚАТЕ: СОҒЫЛУ", "#ef4444");
+                            isMoving = false;
+                            return;
+                        }
+                    }
+                }
+
+                if(checkWin()) {
+                    document.getElementById('win-modal').style.display = 'flex';
+                } else if (variables.qadam > 0) {
+                    log("Мәреге жетпедіңіз.", "#94a3b8");
+                }
+            } catch (e) {
+                log("ЖҮЙЕЛІК ҚАТЕ", "#ef4444");
+            }
+            isMoving = false;
+        }
+
+        async function execute(lines, start, end) {
+            let i = start;
+            while (i < end) {
+                let line = lines[i];
+                let trimmed = line.trim();
+                if(!trimmed || trimmed.startsWith('#')) { i++; continue; }
+
+                if(trimmed.includes('=') && !trimmed.startsWith('if') && !trimmed.startsWith('elif')) {
+                    let parts = trimmed.split('=');
+                    let varName = parts[0].trim();
+                    let expr = parts[1].trim();
+                    let val = parseMath(expr);
+                    variables[varName] = val;
+                    log(`${varName} = ${val}`, "#6366f1");
+                    updateUI();
+                    i++; continue;
+                }
+
+                if(trimmed.startsWith('if ') || trimmed.startsWith('elif ')) {
+                    let isTrue = evalComparison(trimmed);
+                    let block = getBlock(lines, i + 1);
+                    if(isTrue) {
+                        await execute(lines, block.start, block.end);
+                        i = block.end;
+                        while(i < lines.length && (lines[i].trim().startsWith('elif') || lines[i].trim().startsWith('else'))) {
+                            let nextBlock = getBlock(lines, i + 1);
+                            i = nextBlock.end;
+                        }
+                    } else {
+                        i = block.end;
+                    }
+                    continue;
+                }
+
+                if(trimmed.startsWith('else:')) {
+                    let block = getBlock(lines, i + 1);
+                    await execute(lines, block.start, block.end);
+                    i = block.end;
+                    continue;
+                }
+
+                if(trimmed.startsWith('print')) {
+                    let msg = trimmed.match(/["'](.*?)["']/);
+                    if(msg) log(msg[1], "#10b981");
+                    i++; continue;
+                }
+                i++;
+            }
+        }
+
+        function parseMath(expr) {
+            if(expr.includes('/')) {
+                let parts = expr.split('/');
+                let left = parts[0].trim();
+                let right = parts[1].trim();
+                let v1 = isNaN(left) ? (variables[left] || 0) : parseFloat(left);
+                let v2 = isNaN(right) ? (variables[right] || 0) : parseFloat(right);
+                return v2 !== 0 ? Math.floor(v1 / v2) : 0;
+            }
+            return isNaN(expr) ? (variables[expr] || 0) : parseFloat(expr);
+        }
+
+        function evalComparison(text) {
+            let condition = text.replace('if ', '').replace('elif ', '').replace(':', '').trim();
+            const ops = ['==', '>', '<', '>=', '<='];
+            for(let op of ops) {
+                if(condition.includes(op)) {
+                    let parts = condition.split(op);
+                    let val1 = isNaN(parts[0].trim()) ? (variables[parts[0].trim()] || 0) : parseFloat(parts[0].trim());
+                    let val2 = isNaN(parts[1].trim()) ? (variables[parts[1].trim()] || 0) : parseFloat(parts[1].trim());
+                    if(op === '==') return val1 == val2;
+                    if(op === '>') return val1 > val2;
+                    if(op === '<') return val1 < val2;
+                    if(op === '>=') return val1 >= val2;
+                    if(op === '<=') return val1 <= val2;
+                }
+            }
+            return false;
+        }
+
+        function getBlock(lines, start) {
+            let i = start;
+            let firstIndent = -1;
+            while(i < lines.length) {
+                let line = lines[i];
+                if(line.trim() === "") { i++; continue; }
+                let curIndent = line.search(/\S/);
+                if(firstIndent === -1) firstIndent = curIndent;
+                if(curIndent < firstIndent && curIndent !== -1) break;
+                i++;
+            }
+            return { start, end: i };
+        }
+
+        async function moveStep() {
+            let nx = playerPos.x, nz = playerPos.z;
+            nz--; 
+            if(isWall(nx, nz)) throw new Error("CRASH");
+            playerPos.x = nx; playerPos.z = nz;
+            syncPlayer();
+            await new Promise(r => setTimeout(r, 600));
+        }
+
+        function isWall(x, z) {
+            const map = currentLevelData.map;
+            if(z < 0 || z >= map.length || x < 0 || x >= map[0].length) return true;
+            return map[z][x] === 0;
+        }
+
+        function checkWin() {
+            return currentLevelData.map[playerPos.z][playerPos.x] === 3;
+        }
+
+        function log(m, c) {
+            const d = document.createElement('div');
+            d.style.color = c;
+            d.innerHTML = `<span style="opacity: 0.3">></span> ${m}`;
+            document.getElementById('log-content').appendChild(d);
+            document.getElementById('console-out').scrollTop = 9999;
+        }
+
+        // Button Events
+        document.getElementById('run-btn').onclick = runCode;
+        document.getElementById('reset-btn').onclick = () => loadLevel();
+        
+        // Navigation to next file
+        document.getElementById('next-level-btn').onclick = () => {
+            window.location.href = 'ss copy.html';
+        };
+
+        document.getElementById('show-answer-btn').onclick = () => {
+            document.getElementById('answer-text').textContent = currentLevelData.solution;
+            document.getElementById('answer-modal').style.display = 'flex';
+        };
+
+        window.onload = init3D;
+    </script>
+</body>
+</html>
