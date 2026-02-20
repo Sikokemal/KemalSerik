@@ -145,13 +145,25 @@ function createSkin(color, emoji) {
 
 // --- DATA ---
 const questions = [
-    { q: "HTML дегеніміз не?", options: ["Бағдарламалау тілі", "Гипермәтіндік тіл", "Деректер қоры", "Операциялық жүйе"], correct: 1 },
-    { q: "CSS не үшін қолданылады?", options: ["Стиль жасау", "Сервер басқару", "Логика жазу", "Мәлімет сақтау"], correct: 0 },
-    { q: "Айнымалыны қалай жариялаймыз?", options: ["function x", "let x", "div x", "model x"], correct: 1 },
-    { q: "Массивтің бірінші индексі?", options: ["1", "-1", "0", "null"], correct: 2 },
-    { q: "DOM дегеніміз не?", options: ["Data Model", "Document Object", "Digital Order", "Disk Operating"], correct: 1 },
-    { q: "Тұрақты айнымалы (constant)?", options: ["var", "let", "const", "static"], correct: 2 },
-    { q: "Цикл түрі емес?", options: ["for", "while", "if", "do-while"], correct: 2 }
+    { q: "Python-да шартты тексеру үшін қай оператор қолданылады?", options: ["for", "if", "while", "def"], correct: 1 },
+    { q: "if шарты орындалмаған жағдайда қандай блок жұмыс істейді?", options: ["else", "then", "except", "finally"], correct: 0 },
+    { q: "Бірнеше шартты тексеру үшін қай оператор қолданылады?", options: ["else if", "elseif", "elif", "case"], correct: 2 },
+    { q: "Теңдікті тексеру операторын көрсетіңіз:", options: ["=", "==", "===", "is"], correct: 1 },
+    { q: "Тең емес (not equal) операторы қалай жазылады?", options: ["!=", "<>", "/=", "not="], correct: 0 },
+    { q: "Python-да код блогы қалай ерекшеленеді?", options: ["Жақшамен {}", "Нүктелі үтірмен ;", "Шегініспен (indentation)", "Тырнақшамен"], correct: 2 },
+    { q: "if x > 5: шартынан кейін міндетті түрде не қойылады?", options: [";", ".", ":", ","], correct: 2 },
+    { q: "Логикалық 'ЖӘНЕ' операторы қайсысы?", options: ["&", "and", "&&", "plus"], correct: 1 },
+    { q: "Логикалық 'НЕМЕСЕ' операторы қайсысы?", options: ["||", "or", "|", "either"], correct: 1 },
+    { q: "Шартты теріске шығару операторы:", options: ["not", "!", "no", "false"], correct: 0 },
+    { q: "True және False мәндері қандай типке жатады?", options: ["int", "string", "boolean", "float"], correct: 2 },
+    { q: "if 5 > 3: print('A') else: print('B') коды не шығарады?", options: ["A", "B", "Қате", "Ештеңе"], correct: 0 },
+    { q: "Үлкен немесе тең операторын көрсетіңіз:", options: [">", "=>", "=>=", ">="], correct: 3 },
+    { q: "Кіші немесе тең операторын көрсетіңіз:", options: ["=<", "<=", "<", "<<"], correct: 1 },
+    { q: "if 0: шарты орындала ма?", options: ["Иә", "Жоқ", "Қате береді", "Тек True болса"], correct: 1 },
+    { q: "Төмендегінің қайсысы дұрыс емес?", options: ["if a == b:", "if a = b:", "if a > b:", "if a != b:"], correct: 1 },
+    { q: "Бір жолда жазылатын шарт қалай аталады?", options: ["Short if", "Ternary operator", "Mini if", "Line if"], correct: 1 },
+    { q: "x = 10; if x % 2 == 0: бұл шарт нені тексеред?", options: ["Тақтықты", "Оң санды", "Жұптықты", "Нөлді"], correct: 2 },
+    { q: "if True or False: нәтижесі қандай болады?", options: ["True", "False", "None", "Error"], correct: 0 }
 ];
 
 const heroPool = [
