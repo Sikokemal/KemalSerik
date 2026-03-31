@@ -233,14 +233,13 @@
 
         const apiKey = "REPLACE_ME_WITH_GEMINI_API_KEY"; //
         
-       function renderText(id, text) {
+        function renderText(id, text) {
     const el = document.getElementById(id);
     el.innerHTML = '';
     if (!text) return;
 
-    // Тек қана жұлдызшаларды (Markdown bold/italic) өшіреміз, 
-    // бірақ қиғаш сызықтарды (/) қалдырамыз
-    const cleanText = text.replace(/[\*]/g, '');
+    // Жұлдызшаларды (** немесе *), қиғаш сызықтарды (/) және астын сызуды (_) өшіру
+    const cleanText = text.replace(/[\*\\/]/g, '');
 
     cleanText.split('\n').forEach(line => {
         if (line.trim()) {
@@ -251,85 +250,8 @@
     });
 }
 
-async function generatePlan() {
-    const topic = document.getElementById('topic').value;
-    const course = document.getElementById('course').value;
-    const group = document.getElementById('group').value;
-    const moduleName = document.getElementById('module').value;
-    const btn = document.getElementById('generateBtn');
-    const btnText = document.getElementById('btnText');
-
-    if (!topic) return alert("Тақырыпты енгізіңіз!");
-
-    btn.disabled = true;
-    btnText.innerHTML = '<span class="loader"></span> Дайындалуда...';
-
-    const systemPrompt = `Сен Ақтөбе құрылыс-техникалық колледжінің тәжірибелі ІТ оқытушысысың. 
-    Берілген тақырып бойынша сабақ жоспарын қазақ тілінде құрастыр. 
-    
-    ТАЛАПТАР:
-    1. Теория (theory) бөлімі кем дегенде 2 үлкен параграфтан тұрсын.
-    2. tableRows бөліміне 3-4 техникалық термин қос.
-    3. Жауапты ТЕК JSON форматында бер.`;
-
-    try {
-        // МОДЕЛЬ: gemini-1.5-flash (тұрақты нұсқа)
-        const URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-        const res = await fetch(URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts: [{ text: `Тақырыбы: ${topic}. Курс: ${course}, Топ: ${group}. Пән: ${moduleName}` }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: { 
-                    responseMimeType: "application/json",
-                    temperature: 0.7 
-                }
-            })
-        });
-
-        if (!res.ok) {
-            const errorData = await res.json();
-            throw new Error(errorData.error ? errorData.error.message : "API Error");
-        }
-
-        const response = await res.json();
-        const data = JSON.parse(response.candidates[0].content.parts[0].text);
-
-        // Мәліметтерді шығару
-        document.getElementById('outTopic').innerText = topic;
-        document.getElementById('outModule').innerText = moduleName;
-        document.getElementById('outCourseGroup').innerText = `${course}, ${group}`;
-
-        renderText('outGoal', data.goal);
-        renderText('outTasks', data.tasks);
-        renderText('outResults', data.results);
-        renderText('outBrainstorm', data.brainstorm);
-        renderText('outTheory', data.theory);
-        renderText('outPractical', data.practical);
-        renderText('outConclusion', data.conclusion);
-        renderText('outReflection', data.reflection);
-        renderText('outHomework', data.homework);
-
-        const tbody = document.querySelector('#outTable tbody');
-        tbody.innerHTML = '';
-        data.tableRows.forEach(row => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${row.c}</td><td>${row.d}</td><td>${row.m}</td>`;
-            tbody.appendChild(tr);
-        });
-
-        document.getElementById('printArea').scrollIntoView({ behavior: 'smooth' });
-
-    } catch (error) {
-        console.error("API Error:", error);
-        alert("Қате орын алды: " + error.message);
-    } finally {
-        btn.disabled = false;
-        btnText.innerText = 'Жоспарды құрастыру';
-    }
-}            const topic = document.getElementById('topic').value;
+        async function generatePlan() {
+            const topic = document.getElementById('topic').value;
             const course = document.getElementById('course').value;
             const group = document.getElementById('group').value;
             const btn = document.getElementById('generateBtn');
@@ -429,7 +351,7 @@ async function generatePlan() {
                 btn.disabled = false;
                 btnText.innerText = 'Жоспарды құрастыру';
             }
-        
+        }
 
         document.getElementById('generateBtn').addEventListener('click', generatePlan);
 
