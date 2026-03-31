@@ -23,15 +23,16 @@ jobs:
       - name: Inject API Key and Verify
         run: |
           echo "Injecting API Key..."
-          # Заменяем маркер во всех HTML файлах
-          sed -i "s/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" codebatle.html || true
-          sed -i "s/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" TaskAi.html || true
-          sed -i "s/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" Planlesson.html || true
-          sed -i "s/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" generatorLecture.html || true
+          # Тексереміз: біздің HTML-де REPLACE_ME_WITH_GEMINI_API_KEY жазылған ба?
+          # Барлық HTML файлдарындағы маркерді ауыстырамыз
+          sed -i 's/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g' codebatle.html || true
+          sed -i 's/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g' TaskAi.html || true
+          sed -i 's/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g' Planlesson.html || true
+          sed -i 's/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g' generatorLecture.html || true
 
-          # Проверка: остался ли маркер в критически важном файле
+          # Тексеру (Егер маркер әлі де қалса, процесс тоқтайды)
           if grep -q "REPLACE_ME_WITH_GEMINI_API_KEY" Planlesson.html; then
-            echo "Error: API Key NOT injected into Planlesson.html."
+            echo "Error: API Key NOT injected. Placeholder still exists."
             exit 1
           fi
           echo "Success: API Key injected."
