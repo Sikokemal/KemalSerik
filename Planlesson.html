@@ -153,6 +153,7 @@
     </div>
 
     <!-- Баспа аймағы (A4) -->
+        <div id="statusMessage" class="mt-4 hidden rounded border px-3 py-2 text-sm"></div>
     <div id="printArea" class="doc-container">
         <div class="header-college">«АҚТӨБЕ ҚҰРЫЛЫС-ТЕХНИКАЛЫҚ КОЛЛЕДЖІ» МКҚК</div>
         <div class="header-college">ОҚУ САБАҒЫНЫҢ ЖОСПАРЫ</div>
@@ -231,7 +232,25 @@
 
     <script>
 
-        const apiKey = "REPLACE_ME_WITH_GEMINI_API_KEY"; //
+        const apiKey = 'REPLACE_ME_WITH_GEMINI_API_KEY'; //
+        const apiVersion = "v1beta";
+        const modelName = "gemini-2.5-flash";
+        
+        function showStatus(message, type = 'error') {
+    const box = document.getElementById('statusMessage');
+    box.className = 'mt-4 rounded border px-3 py-2 text-sm';
+
+    if (type === 'success') {
+        box.classList.add('bg-green-50', 'border-green-300', 'text-green-700');
+    } else if (type === 'info') {
+        box.classList.add('bg-blue-50', 'border-blue-300', 'text-blue-700');
+    } else {
+        box.classList.add('bg-red-50', 'border-red-300', 'text-red-700');
+    }
+
+    box.textContent = message;
+    box.classList.remove('hidden');
+}
         
         function renderText(id, text) {
     const el = document.getElementById(id);
@@ -256,8 +275,15 @@
             const group = document.getElementById('group').value;
             const btn = document.getElementById('generateBtn');
             const btnText = document.getElementById('btnText');
+            const configuredKey = apiKey.trim();
+
+            if (!configuredKey || configuredKey === 'REPLACE_ME_WITH_GEMINI_API_KEY') {
+                showStatus('Ошибка: укажите настоящий Gemini API key в константе apiKey внутри nn.html.');
+                return;
+            }
 
             btn.disabled = true;
+            showStatus('Идёт генерация плана...', 'info');
             btnText.innerHTML = '<span class="loader"></span> Дайындалуда...';
 
             const systemPrompt = `Сен Ақтөбе құрылыс-техникалық колледжінің тәжірибелі ІТ оқытушысысың. 
@@ -293,12 +319,15 @@
                 
                 for (let i = 0; i < 5; i++) {
                     try {
-                        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+                        const res = await fetch(`https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent`, {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-goog-api-key': configuredKey
+                            },
                             body: JSON.stringify({
                                 contents: [{ parts: [{ text: `Тақырыбы: ${topic}. ${course}, ${group}.` }] }],
-                                systemInstruction: { parts: [{ text: systemPrompt }] },
+                                system_instruction: { parts: [{ text: systemPrompt }] },
                                 generationConfig: { responseMimeType: "application/json" }
                             })
                         });
@@ -312,11 +341,16 @@
                             await new Promise(r => setTimeout(r, currentDelay));
                             currentDelay *= 2;
                         } else {
-                            throw new Error(`API Error: ${res.status}`);
+                            const errorText = await res.text();
+                            throw new Error(`API Error: ${res.status}. ${errorText}`);
                         }
                     } catch (err) {
                         if (i === 4) throw err;
                     }
+                }
+
+                if (!response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    throw new Error('Пустой или некорректный ответ от API.');
                 }
 
                 const data = JSON.parse(response.candidates[0].content.parts[0].text);
@@ -344,9 +378,11 @@
                 });
 
                 document.getElementById('printArea').scrollIntoView({ behavior: 'smooth' });
+                showStatus('План успешно сгенерирован.', 'success');
 
             } catch (error) {
                 console.error("API Error:", error);
+                showStatus(`Ошибка генерации: ${error.message}`);
             } finally {
                 btn.disabled = false;
                 btnText.innerText = 'Жоспарды құрастыру';
@@ -400,5 +436,4 @@
     </script>
 </body>
 </html>
-
 
