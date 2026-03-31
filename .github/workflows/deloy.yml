@@ -1,18 +1,49 @@
 name: Deploy to GitHub Pages
+
 on:
   push:
     branches: ["main"]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
-  build:
+  build-and-deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Inject API Key
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inject API Key and Verify
         run: |
-          sed -i "s/REPLACE_ME_WITH_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" codebatle.html
+          echo "Injecting API Key..."
+          # Заменяем маркер во всех HTML файлах
+          sed -i "s/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" codebatle.html || true
+          sed -i "s/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" TaskAi.html || true
+          sed -i "s/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" Planlesson.html || true
+          sed -i "s/REPLACE_ME_WITH_GEMINI_API_KEY/${{ secrets.GEMINI_API_KEY }}/g" generatorLecture.html || true
+
+          # Проверка: остался ли маркер в критически важном файле
+          if grep -q "REPLACE_ME_WITH_GEMINI_API_KEY" Planlesson.html; then
+            echo "Error: API Key NOT injected into Planlesson.html."
+            exit 1
+          fi
+          echo "Success: API Key injected."
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
+
       - name: Deploy to GitHub Pages
-        uses: sailscast/github-pages-deploy-action@v1.2.0
+        id: deployment
+        uses: actions/deploy-pages@v4
