@@ -139,8 +139,65 @@
             editor.focus();
         }
 
-        async function generateLecture() {
-            const topic = document.getElementById('topicInput').value.trim();
+async function generateLecture() {
+    const topic = document.getElementById('topicInput').value.trim();
+    
+    // Проверка ключа (если вы забыли его вставить)
+    if (apiKey === "REPLACE_ME_WITH_GEMINI_API_KEY" || !apiKey) {
+        return notify("Қате: API Key орнатылмаған!");
+    }
+
+    if (!topic) return notify("Тақырыпты жазыңыз!");
+
+    loader.classList.remove('hidden');
+    btnText.textContent = "Дайындалуда...";
+
+    // ИСПРАВЛЕНО: Рабочее имя модели
+    const modelName = "gemini-1.5-flash"; 
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+    const payload = {
+        contents: [
+            {
+                role: "user", // Для надежности используем стандартную роль
+                parts: [{ text: `Сен университет профессорысың. Тақырыбы: "${topic}" бойынша толық академиялық дәріс жаз. Маркдаун қолданба. Соңында 8 бақылау сұрағын қос.` }]
+            }
+        ]
+    };
+
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        
+        if (data.error) {
+            console.error("API Error:", data.error);
+            notify("Қате: " + data.error.message);
+            throw new Error(data.error.message);
+        }
+
+        const text = data.candidates[0].content.parts[0].text;
+        renderContent(text);
+        
+        // Показываем интерфейс после успеха
+        document.getElementById('editorContainer').classList.remove('hidden');
+        document.getElementById('exportPanel').classList.remove('hidden');
+        document.getElementById('toolbar').classList.remove('hidden');
+        document.getElementById('welcome').classList.add('hidden');
+        notify("Дәріс дайын!");
+
+    } catch (error) {
+        console.error("Fetch error:", error);
+        notify("Байланыс қатесі. Консольді тексеріңіз.");
+    } finally {
+        loader.classList.add('hidden');
+        btnText.textContent = "Генерациялау";
+    }
+}            const topic = document.getElementById('topicInput').value.trim();
             if (!topic) return notify("Тақырыпты жазыңыз!");
 
             loader.classList.remove('hidden');
