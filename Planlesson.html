@@ -232,7 +232,7 @@
 
     <script>
 
-        const apiKey = "AIzaSyDNpJAD1Dgt0knEKGwfzQ8YWD2ehA3_hu4"; //
+        const API_KEY_STORAGE = "GITHUB_SECRET_API_KEY";
         const apiVersion = "v1beta";
         const modelName = "gemini-2.5-flash";
         
@@ -269,54 +269,48 @@
     });
 }
 
+        function getConfiguredApiKey() {
+            const savedKey = localStorage.getItem(API_KEY_STORAGE);
+            if (savedKey && savedKey.trim()) {
+                return savedKey.trim();
+            }
+
+            const enteredKey = window.prompt("Enter your Gemini API key (AIza...)");
+            if (!enteredKey) {
+                return "";
+            }
+
+            const normalizedKey = enteredKey.trim();
+            if (normalizedKey) {
+                localStorage.setItem(API_KEY_STORAGE, normalizedKey);
+            }
+
+            return normalizedKey;
+        }
+
         async function generatePlan() {
-            const topic = document.getElementById('topic').value;
-            const course = document.getElementById('course').value;
-            const group = document.getElementById('group').value;
+            const topic = document.getElementById('topic').value.trim();
+            const course = document.getElementById('course').value.trim();
+            const group = document.getElementById('group').value.trim();
             const btn = document.getElementById('generateBtn');
             const btnText = document.getElementById('btnText');
-            const configuredKey = apiKey.trim();
+            const configuredKey = getConfiguredApiKey();
 
-            if (!configuredKey || configuredKey === 'REPLACE_ME_WITH_GEMINI_API_KEY') {
-                showStatus('Ошибка: укажите настоящий Gemini API key в константе apiKey внутри nn.html.');
+            if (!configuredKey) {
+                showStatus('Enter a valid Gemini API key to continue.');
                 return;
             }
 
             btn.disabled = true;
-            showStatus('Идёт генерация плана...', 'info');
-            btnText.innerHTML = '<span class="loader"></span> Дайындалуда...';
+            showStatus('Generating lesson plan...','info');
+            btnText.innerHTML = '<span class="loader"></span> Working...';
 
-            const systemPrompt = `Сен Ақтөбе құрылыс-техникалық колледжінің тәжірибелі ІТ оқытушысысың. 
-            Берілген тақырып бойынша сабақ жоспарын қазақ тілінде құрастыр. 
-            
-            МАҢЫЗДЫ ТАЛАПТАР:
-            1. Әр бөлімді барынша толық және егжей-тегжейлі жаз.
-            2. Theory (теория) бөлімі кем дегенде 2 үлкен параграфтан тұруы тиіс.
-            3. Practical (практика) бөлімінде нақты тапсырмалар қос.Оларды топтықта орындауға ыңғайлы етіп жаз.
-            
-            ҚАҒИДАЛАР:
-            1. Теория бөлімінде (theory) тек мәтін болсын, тізімдерді (1, 2) қолданба.
-            2. Сұрақтар мен міндеттерде нөмірленген тізімді қолдан.
-            3. tableRows бөліміне 3-4 маңызды техникалық термин немесе элемент қос.
-            
-            Жауапты қатаң түрде мына JSON форматында бер:
-            {
-                "goal": "сабақтың негізгі мақсаты",
-                "tasks": "1. ...\\n2. ...",
-                "results": "студенттер не үйренеді",
-                "brainstorm": "өткенді қайталауға арналған 3-5 сұрақ",
-                "theory": "жаңа тақырыптың негізгі мазмұны",
-                "practical": "практикалық тапсырманың мазмұны",
-                "tableRows": [{"c": "компонент", "d": "сипаттама", "m": "маңызы"}],
-                "conclusion": "сабақты қорытындылау",
-                "reflection": "кері байланыс әдісі",
-                "homework": "үй тапсырмасы"
-            }`;
+            const systemPrompt = `You are an experienced IT teacher. Create a lesson plan in Kazakh language and return only valid JSON with these keys: goal, tasks, results, brainstorm, theory, practical, tableRows, conclusion, reflection, homework. Rules: tasks should be a numbered list string, theory should be plain paragraph text, tableRows should contain 3-4 objects with keys c, d, m.`;
 
             try {
                 let currentDelay = 1000;
                 let response;
-                
+
                 for (let i = 0; i < 5; i++) {
                     try {
                         const res = await fetch(`https://generativelanguage.googleapis.com/${apiVersion}/models/${modelName}:generateContent`, {
@@ -326,20 +320,24 @@
                                 'x-goog-api-key': configuredKey
                             },
                             body: JSON.stringify({
-                                contents: [{ parts: [{ text: `Тақырыбы: ${topic}. ${course}, ${group}.` }] }],
+                                contents: [{ parts: [{ text: `Topic: ${topic}. Course: ${course}. Group: ${group}.` }] }],
                                 system_instruction: { parts: [{ text: systemPrompt }] },
-                                generationConfig: { responseMimeType: "application/json" }
+                                generationConfig: { responseMimeType: 'application/json' }
                             })
                         });
-                        
+
                         if (res.ok) {
                             response = await res.json();
                             break;
                         }
-                        
+
                         if (res.status === 429) {
                             await new Promise(r => setTimeout(r, currentDelay));
                             currentDelay *= 2;
+                        } else if (res.status === 403) {
+                            localStorage.removeItem(API_KEY_STORAGE);
+                            const errorText = await res.text();
+                            throw new Error(`Access denied. This API key was likely blocked or reported as leaked. Enter a new key. ${errorText}`);
                         } else {
                             const errorText = await res.text();
                             throw new Error(`API Error: ${res.status}. ${errorText}`);
@@ -350,7 +348,7 @@
                 }
 
                 if (!response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-                    throw new Error('Пустой или некорректный ответ от API.');
+                    throw new Error('Empty or invalid response from the API.');
                 }
 
                 const data = JSON.parse(response.candidates[0].content.parts[0].text);
@@ -371,21 +369,20 @@
 
                 const tbody = document.querySelector('#outTable tbody');
                 tbody.innerHTML = '';
-                data.tableRows.forEach(row => {
+                (data.tableRows || []).forEach(row => {
                     const tr = document.createElement('tr');
-                    tr.innerHTML = `<td>${row.c}</td><td>${row.d}</td><td>${row.m}</td>`;
+                    tr.innerHTML = `<td>${row.c || ''}</td><td>${row.d || ''}</td><td>${row.m || ''}</td>`;
                     tbody.appendChild(tr);
                 });
 
                 document.getElementById('printArea').scrollIntoView({ behavior: 'smooth' });
-                showStatus('План успешно сгенерирован.', 'success');
-
+                showStatus('Lesson plan generated successfully.', 'success');
             } catch (error) {
-                console.error("API Error:", error);
-                showStatus(`Ошибка генерации: ${error.message}`);
+                console.error('API Error:', error);
+                showStatus(`Generation error: ${error.message}`);
             } finally {
                 btn.disabled = false;
-                btnText.innerText = 'Жоспарды құрастыру';
+                btnText.innerText = '???????? ?????????';
             }
         }
 
@@ -436,4 +433,3 @@
     </script>
 </body>
 </html>
-
